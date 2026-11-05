@@ -204,7 +204,10 @@ function statPanel(stat, P, m, acc) {
   const s = P.stats[stat];
   const res = m.prediction && m.prediction.result && m.prediction.result[stat];
   const actual = res && !res.excluded ? `<span class="actual">Actual ${res.actual_total}</span>` : "";
-  const head = `<h3>${STAT[stat]} <span class="sub">${STAT_HELP[stat]}</span></h3>
+  const g = acc && acc.backtest && acc.backtest.by_league && acc.backtest.by_league[m.comp];
+  const weak = g && g.gain_pct && g.gain_pct[stat] < 0
+    ? `<p class="weak">In testing on 2025-26, this number was no better than the ${h(LEAGUES[m.comp])} average for ${STAT[stat].toLowerCase()}.</p>` : "";
+  const head = `<h3>${STAT[stat]} <span class="sub">${STAT_HELP[stat]}</span></h3>${weak}
     <div class="stat-row"><span class="stat-big">${fx(s.total)}</span><span class="range">likely ${s.range[0]}–${s.range[1]}</span>${actual}</div>
     <p class="small sub" style="margin:6px 0 0">${h(m.home.short)} ${fx(s.home)}, ${h(m.away.short)} ${fx(s.away)}</p>
     ${lineList(stat, s, m.prediction && m.prediction.result)}`;

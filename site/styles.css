@@ -399,3 +399,4 @@ table.heat td.h3 { background: color-mix(in srgb, var(--pitch) 30%, transparent)
 table.heat td.h2 { background: color-mix(in srgb, var(--pitch) 18%, transparent); }
 table.heat td.h1 { background: color-mix(in srgb, var(--pitch) 7%, transparent); }
 table.heat td.h0 { background: var(--red-soft); color: var(--red); }
+.weak { font-size: .8rem; color: var(--amber); background: var(--amber-soft); border-radius: 6px; padding: 4px 8px; margin: 6px 0 4px; max-width: none; }

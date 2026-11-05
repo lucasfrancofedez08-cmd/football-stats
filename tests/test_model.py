@@ -55,15 +55,14 @@ def _logloss_1x2(preds):
 
 
 def test_beats_league_average_on_2025_26():
-    """Walk-forward over a real season: the model must beat a no-information baseline on 1X2."""
-    for league in ("la-liga", "premier-league"):
+    """Walk-forward over every 2025-26 match: the model must clearly beat a no-information baseline on 1X2."""
+    from pipeline.sources import PREDICTED
+    for league in PREDICTED:
         lg = seasons(league)
         pred = Predictor(league, lg[:4])
         season = lg[4]
         model, base = [], []
-        for i, m in enumerate(season):
-            if i % 3:  # every third match keeps the test fast
-                continue
+        for m in season:
             cur = [x for x in season if x["date"] < m["date"]]
             g = pred.predict(cur, m["home"], m["away"], fast=True)["stats"]["goals"]
             mh, ma = league_means(cur, pred.prev, "goals", pred.params)
@@ -71,7 +70,7 @@ def test_beats_league_average_on_2025_26():
             k = "home_win" if m["hg"] > m["ag"] else "draw" if m["hg"] == m["ag"] else "away_win"
             model.append(g[k])
             base.append(b[k])
-        assert _logloss_1x2(model) < _logloss_1x2(base) - 0.01, league
+        assert _logloss_1x2(model) < _logloss_1x2(base) - 0.02, league
 
 
 def test_derby_and_caps():

@@ -31,8 +31,9 @@ LEAGUES = {
     "conference-league": {"name": "Conference League", "short": "UECL", "espn": "uefa.europa.conf", "fd": None, "fotmob": 10216, "country": "Europe", "kind": "europe"},
 }
 DOMESTIC = [k for k, v in LEAGUES.items() if v["kind"] == "domestic"]
-# leagues whose estimates passed the backtest (beat league averages on 2025-26); others show stats only
-PREDICTED = ["premier-league", "la-liga"]
+# leagues whose estimates passed the backtest (beat league averages on win/draw/loss and goals in 2025-26,
+# see backtest/results.json "by_league"); a league that fails is removed here and shows stats only
+PREDICTED = list(DOMESTIC)
 EUROPE = [k for k, v in LEAGUES.items() if v["kind"] == "europe"]
 FOTMOB = "https://www.fotmob.com/api/data"
 FOTMOB_LEAGUE = {k: LEAGUES[k]["fotmob"] for k in DOMESTIC}
