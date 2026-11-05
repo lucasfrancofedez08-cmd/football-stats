@@ -124,7 +124,8 @@ def injury_text(ret):
     if "season" in low:
         return "injured, out for the season"
     if low.startswith(("early", "mid", "late")):
-        return f"injured, expected back {low.replace(' 20', ', 20').split(',')[0]}"
+        parts = ret.split()
+        return f"injured, expected back {parts[0].lower()}-{parts[1]}" if len(parts) > 1 else f"injured, expected back {low}"
     return f"injured, {low}"
 
 
