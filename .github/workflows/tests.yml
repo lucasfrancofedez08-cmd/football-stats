@@ -2,7 +2,7 @@ name: tests
 on:
   push:
     branches: [main]
-    paths: ["model/**", "pipeline/**", "tests/**", "backtest/**"]
+    paths: ["model/**", "pipeline/**", "tests/**", "backtest/**", "site/*.*"]
   workflow_dispatch:
 jobs:
   test:
@@ -12,5 +12,6 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install pytest
+      - run: pip install pytest playwright
+      - run: python -m playwright install --with-deps chromium
       - run: python -m pytest -q

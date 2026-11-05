@@ -151,6 +151,22 @@ function tableHtml(rows, lg) {
     ? `<span><i style="background:var(--pitch)"></i>Top 8 go straight to the last 16</span>`
     : `<span><i style="background:var(--pitch)"></i>Usual Champions League places</span><span><i style="background:var(--red)"></i>Direct relegation</span>`}</div>`;
 }
+function featureBlock(u, label) {
+  const p = u.prediction;
+  return `<a class="feature grow" href="#/match/${h(u.id)}">
+    <div class="feature-top"><span>${h(label)}: ${h(LTAG[u.comp])}, ${h(kick(u.kickoff))}</span><span>${h(u.venue || "")}</span></div>
+    <div class="feature-teams"><span class="t">${disc(u.home, "md")}<span>${h(u.home.name)}</span></span><span class="x">v</span><span class="t a"><span>${h(u.away.name)}</span>${disc(u.away, "md")}</span></div>
+    ${p ? strip(u.home, u.away, p) : ""}
+    ${p ? `<div class="feature-exp"><span><b>${fx(p.goals)}</b> goals</span><span><b>${fx(p.corners)}</b> corners</span><span><b>${fx(p.cards)}</b> cards</span><span>expected</span></div>` : ""}
+  </a>`;
+}
+
+function scorerBars(list, n = 10) {
+  const top = list.slice(0, n), max = Math.max(...top.map(p => p.goals), 1);
+  return `<ol class="scorers">${top.map((p, i) => `<li><span class="rk">${i + 1}</span><a class="who" href="#/team/${h(p.team.slug)}">${disc(p.team, "xs")}<span><b>${h(p.name)}</b><span class="sub">${h(p.team.short || p.team.name)}</span></span></a>
+    <span class="gbar"><span style="width:${(p.goals / max) * 100}%;background:${css(pick(p.team) || [27, 106, 76])}"></span></span><span class="g">${p.goals}</span><span class="as">${p.assists ? `${p.assists} ast` : ""}</span></li>`).join("")}</ol>`;
+}
+
 async function renderLeague(lg) {
   try { localStorage.setItem("league", lg); } catch (e) { /* private mode */ }
   const L = await get(`league-${lg}.json`);
@@ -281,7 +297,7 @@ function compareSection(m, teams) {
   const colors = teamColors(m.home, m.away);
   const ppg = t => (t.record.overall.p ? (3 * t.record.overall.w + t.record.overall.d) / t.record.overall.p : null);
   const av = (t, s, k) => t.averages[s].overall[k];
-  const row = (label, a, b, d = 1) => cmpRow(label, a == null ? null : +a.toFixed(d), b == null ? null : +b.toFixed(d), colors);
+  const row = (label, a, b, d = 1) => cmpRow(label, a == null ? null : a.toFixed(d), b == null ? null : b.toFixed(d), colors);
   return `<section class="section"><h2>Season so far</h2><ul class="cmp">
     ${row("Points per game", ppg(th), ppg(ta), 2)}
     ${row("Goals scored per game", av(th, "goals", "for"), av(ta, "goals", "for"))}
@@ -547,8 +563,8 @@ function renderAbout() {
 
 /* ---------------------------------------------------------------- home */
 function leaderCard(L) {
-  return `<a class="leader" href="#/league/${h(L.key)}"><div class="ld-head"><b class="ltag ${h(L.key)}">${h(LSHORT[L.key])}</b><span>${h(L.name)}</span></div>
-    ${L.top.length ? `<ol>${L.top.map(r => `<li><span class="pos-s">${r.pos}</span>${disc(r.team, "xs")}<span class="nm">${h(r.team.short || r.team.name)}</span>${formDots(r.form)}<b>${r.pts}</b></li>`).join("")}</ol>` : `<p class="sub small">No games yet.</p>`}</a>`;
+  return `<a class="leader ${h(L.key)}" href="#/league/${h(L.key)}"><div class="ld-head">${h(L.name)}<span class="sub small">${L.played} played</span></div>
+    ${L.top.length ? `<ol>${L.top.map(r => `<li><span class="pos-s">${r.pos}</span>${disc(r.team, "xs")}<span class="nm">${h(r.team.name)}</span><b>${r.pts}</b></li>`).join("")}</ol>` : `<p class="sub small">No games yet.</p>`}</a>`;
 }
 function goalsBars(list) {
   const max = Math.max(...list.map(u => u.prediction.goals), 1);
@@ -577,7 +593,8 @@ async function renderHome() {
   const ranked = all.filter(u => u.prediction).sort((a, b) => size(a) - size(b));
   const top = ranked[0], big = ranked.slice(1, 7);
   const used = new Set([top, ...big].filter(Boolean).map(u => u.id));
-  const soon = all.filter(u => daysTo(u.kickoff) <= 2 && !used.has(u.id));
+  const soon = all.filter(u => daysTo(u.kickoff) <= 2 && !used.has(u.id) && !EUROPE.has(u.comp));
+  const euro = all.filter(u => daysTo(u.kickoff) <= 2 && EUROPE.has(u.comp));
   const goaly = all.filter(u => u.prediction).sort((a, b) => b.prediction.goals - a.prediction.goals).slice(0, 6);
   const bt = acc && acc.backtest && acc.backtest.test ? acc.backtest : null;
   const live = acc && acc.live ? acc.live : null;
@@ -596,7 +613,8 @@ async function renderHome() {
     ${wrap(`
       ${BANNER}
       ${big.length ? `<section><h2>Big matches this week</h2><div class="cards">${big.map(u => fixtureCard(u, true)).join("")}</div></section>` : ""}
-      ${soon.length ? `<section class="section"><h2>Next 48 hours</h2>${compactRows(soon)}</section>` : ""}
+      ${soon.length || euro.length ? `<section class="section"><h2>Next 48 hours</h2>${soon.length ? compactRows(soon) : `<p class="empty">No other league matches in the next 48 hours.</p>`}
+        ${euro.length ? `<details class="more"><summary>${euro.length} European ${euro.length === 1 ? "match" : "matches"} (stats only)</summary>${compactRows(euro)}</details>` : ""}</section>` : ""}
       <section class="section"><h2>League leaders</h2><div class="leaders">${H.leaders.map(leaderCard).join("")}</div></section>
       <div class="duo section">
         ${goaly.length ? `<section><h2>Most goals expected this week</h2>${goalsBars(goaly)}</section>` : ""}
