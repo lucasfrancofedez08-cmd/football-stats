@@ -117,6 +117,17 @@ def find_player(name, squad):
 NOT_OUT = ("doubtful", "back in training")
 
 
+def injury_text(ret):
+    low = (ret or "").strip().lower()
+    if not low or low == "unknown":
+        return "injured, return date unknown"
+    if "season" in low:
+        return "injured, out for the season"
+    if low.startswith(("early", "mid", "late")):
+        return f"injured, expected back {low.replace(' 20', ', 20').split(',')[0]}"
+    return f"injured, {low}"
+
+
 def team_news(fm_side, squad, overrides_entry, today):
     """Players out for this match. Returns (out, doubtful, known)."""
     out, doubtful, known = [], [], False
@@ -134,7 +145,7 @@ def team_news(fm_side, squad, overrides_entry, today):
                 doubtful.append(rec)
                 continue
             else:
-                rec["reason"] = f"injured{', back ' + ret if ret and ret.lower() != 'unknown' else ''}"
+                rec["reason"] = injury_text(ret)
             out.append(rec)
     if overrides_entry and overrides_entry.get("checked") and \
             (today - date.fromisoformat(overrides_entry["checked"])).days <= 8:
