@@ -162,7 +162,17 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
         return {"home_win": s["goals"]["home_win"], "draw": s["goals"]["draw"], "away_win": s["goals"]["away_win"],
                 "home_goals": s["goals"]["home"], "away_goals": s["goals"]["away"],
                 "goals": s["goals"]["total"], "corners": s["corners"]["total"], "cards": s["cards"]["total"],
-                "confidence": p["prediction"]["confidence"]["level"], "made_at": p["made_at"]}
+                "team_news": p["prediction"].get("basis", {}).get("team_news", False), "made_at": p["made_at"]}
+
+    def league_scorers(lg):
+        out = []
+        for key, players in squad.get(lg, {}).items():
+            for p in players.values():
+                if p["goals"] or p["assists"]:
+                    out.append({"name": p["name"], "team": tid(lg, key), "goals": p["goals"], "assists": p["assists"],
+                                "minutes": p["minutes"]})
+        out.sort(key=lambda p: (-p["goals"], -p["assists"], p["minutes"]))
+        return out[:10]
 
     # ---------------------------------------------------------------- league files
     upcoming_all = []
@@ -172,7 +182,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
             if lg in DOMESTIC else (lambda e, side: e[side]["espn_id"])
         upcoming = []
         for e in evs:
-            if e.get("status") == "pre" and e["kickoff"] >= now.isoformat()[:16] and len(upcoming) < 40:
+            if e.get("status") == "pre" and e["kickoff"] >= now.isoformat()[:16] and len(upcoming) < 150:
                 hk, ak = key_of(e, "home"), key_of(e, "away")
                 if hk is None or ak is None:
                     continue
@@ -193,7 +203,22 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
             "upcoming": upcoming, "recent": recent, "matches_played": len(matches[lg]),
             "cross_check": {k: rep.get(k) for k in ("verified", "single", "conflict")} if rep else None,
             "predictions_available": lg in DOMESTIC,
+            "scorers": league_scorers(lg),
         })
+
+    # ---------------------------------------------------------------- search index
+    idx = []
+    for lg, ms in matches.items():
+        for m in ms:
+            if m.get("espn_id"):
+                idx.append({"id": m["espn_id"], "k": m.get("kickoff") or m["date"], "c": lg,
+                            "h": tid(lg, m["home"])["slug"], "a": tid(lg, m["away"])["slug"], "s": [m["hg"], m["ag"]]})
+    for u in upcoming_all:
+        p = u.get("prediction")
+        idx.append({"id": u["id"], "k": u["kickoff"], "c": u["comp"], "h": u["home"]["slug"], "a": u["away"]["slug"],
+                    "p": [p["home_win"], p["draw"], p["away_win"]] if p else None})
+    idx.sort(key=lambda x: x["k"])
+    dump(os.path.join(out, "search.json"), idx)
 
     # ---------------------------------------------------------------- match files
     for lg, ms in matches.items():

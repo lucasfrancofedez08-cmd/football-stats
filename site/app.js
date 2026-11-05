@@ -44,6 +44,10 @@ function disc(t, size = "sm") {
     : `<span class="disc ${size}" style="font-size:.7rem;font-weight:800;color:#13201c">${ini}</span>`;
 }
 const tlink = t => `<a class="tlink" href="#/team/${h(t.slug)}">${disc(t, "xs")}<span>${h(t.short || t.name)}</span></a>`;
+const norm = s => String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").toLowerCase();
+const daysTo = iso => (new Date(iso) - Date.now()) / 86400000;
+const LTAG = { "la-liga": "La Liga", "premier-league": "Premier League", "champions-league": "Champions League" };
+const LSHORT = { "la-liga": "La Liga", "premier-league": "Premier League", "champions-league": "UCL" };
 
 /* colours: clubs' own colours, kept readable */
 function rgb(hex) {
@@ -92,7 +96,14 @@ function title(t) { document.title = t ? `${t} — Matchday Numbers` : "Matchday
 const wrap = html => `<div class="wrap">${html}</div>`;
 
 /* ---------------------------------------------------------------- league */
-function fixtureCard(u) {
+function factTag(u) {
+  const p = u.prediction;
+  if (!p) return "";
+  if (p.team_news) return `<span class="pill" title="Injuries and suspensions are included">Team news in</span>`;
+  if (daysTo(u.kickoff) > 7) return `<span class="pill info" title="Far from kick-off: it will move as games are played">Early estimate</span>`;
+  return "";
+}
+function fixtureCard(u, showComp = false) {
   const p = u.prediction;
   const [hc, ac] = teamColors(u.home, u.away);
   const lead = p ? (p.home_win >= p.away_win ? "h" : "a") : null;
@@ -106,13 +117,13 @@ function fixtureCard(u) {
        <div class="fc-team">${disc(u.away)}<span class="nm">${h(u.away.name)}</span><span></span></div>
        <p class="fc-none">${u.comp === "champions-league" ? "Stats only for this competition" : "Estimate appears closer to kick-off"}</p>`;
   return `<a class="fcard" style="--hc:${css(hc)};--ac:${css(ac)}" href="#/match/${h(u.id)}">
-    <div class="fc-top"><span>${h(time(u.kickoff))}${u.round ? `, ${h(u.round)}` : ""}</span>${p ? `<span class="pill ${h(p.confidence)}">${h(p.confidence)} confidence</span>` : ""}</div>
+    <div class="fc-top"><span>${showComp ? `<b class="ltag ${h(u.comp)}">${h(LSHORT[u.comp])}</b> ` : ""}${h(time(u.kickoff))}${u.round ? `, ${h(u.round)}` : ""}</span>${factTag(u)}</div>
     ${body}</a>`;
 }
-function fixtureGroups(list) {
+function fixtureGroups(list, showComp = false) {
   const groups = {};
   list.forEach(u => { const k = longDay(u.kickoff); (groups[k] = groups[k] || []).push(u); });
-  return Object.entries(groups).map(([k, us]) => `<div class="day">${h(k)}</div><div class="cards">${us.map(fixtureCard).join("")}</div>`).join("");
+  return Object.entries(groups).map(([k, us]) => `<div class="day">${h(k)}</div><div class="cards">${us.map(u => fixtureCard(u, showComp)).join("")}</div>`).join("");
 }
 function resultItem(r) {
   const [a, b] = r.score;
@@ -133,20 +144,33 @@ function tableHtml(rows, lg) {
     : `<span><i style="background:var(--pitch)"></i>Champions League places</span><span><i style="background:var(--red)"></i>Relegation</span>`}</div>`;
 }
 
+function featureBlock(u, label) {
+  const p = u.prediction;
+  return `<a class="feature grow" href="#/match/${h(u.id)}">
+    <div class="feature-top"><span>${h(label)}: ${h(LTAG[u.comp])}, ${h(kick(u.kickoff))}</span><span>${h(u.venue || "")}</span></div>
+    <div class="feature-teams"><span class="t">${disc(u.home, "md")}<span>${h(u.home.name)}</span></span><span class="x">v</span><span class="t a"><span>${h(u.away.name)}</span>${disc(u.away, "md")}</span></div>
+    ${p ? strip(u.home, u.away, p) : ""}
+    ${p ? `<div class="feature-exp"><span><b>${fx(p.goals)}</b> goals</span><span><b>${fx(p.corners)}</b> corners</span><span><b>${fx(p.cards)}</b> cards</span><span>expected</span></div>` : ""}
+  </a>`;
+}
+
+function scorerBars(list, n = 10) {
+  const top = list.slice(0, n), max = Math.max(...top.map(p => p.goals), 1);
+  return `<ol class="scorers">${top.map((p, i) => `<li><span class="rk">${i + 1}</span><a class="who" href="#/team/${h(p.team.slug)}">${disc(p.team, "xs")}<span><b>${h(p.name)}</b><span class="sub">${h(p.team.short || p.team.name)}</span></span></a>
+    <span class="gbar"><span style="width:${(p.goals / max) * 100}%;background:${css(pick(p.team) || [27, 106, 76])}"></span></span><span class="g">${p.goals}</span><span class="as">${p.assists ? `${p.assists} ast` : ""}</span></li>`).join("")}</ol>`;
+}
+
 async function renderLeague(lg) {
   try { localStorage.setItem("league", lg); } catch (e) { /* private mode */ }
   const L = await get(`league-${lg}.json`);
   title(L.name);
-  setNav("home");
+  setNav("league");
   const goals = L.table.reduce((s, r) => s + r.gf, 0);
   const games = L.table.reduce((s, r) => s + r.p, 0) / 2;
   const feat = L.upcoming.find(u => u.prediction);
-  const featured = feat ? `<a class="feature grow" href="#/match/${h(feat.id)}">
-      <div class="feature-top"><span>Next up, ${h(kick(feat.kickoff))}</span><span>${h(feat.venue || "")}</span></div>
-      <div class="feature-teams"><span class="t">${disc(feat.home, "md")}<span>${h(feat.home.name)}</span></span><span class="x">v</span><span class="t a"><span>${h(feat.away.name)}</span>${disc(feat.away, "md")}</span></div>
-      ${strip(feat.home, feat.away, feat.prediction)}
-    </a>` : "";
-  const rest = L.upcoming.filter(u => !feat || u.id !== feat.id).slice(0, 19);
+  const featured = feat ? featureBlock(feat, "Next up") : "";
+  const rest = L.upcoming.filter(u => !feat || u.id !== feat.id);
+  const soon = rest.filter(u => daysTo(u.kickoff) <= 14), later = rest.filter(u => daysTo(u.kickoff) > 14);
   app.innerHTML = `
     <section class="hero turf"><div class="wrap">
       <nav class="tabs" aria-label="Competition">${Object.entries(LEAGUES).map(([k, v]) => `<a class="tab" href="#/league/${k}" aria-current="${k === lg}">${h(v)}</a>`).join("")}</nav>
@@ -157,7 +181,9 @@ async function renderLeague(lg) {
     ${wrap(`
       ${L.predictions_available ? BANNER : `<p class="note">Champions League: full match stats and results. Estimates are left out for now, because teams from different leagues can't be compared reliably yet.</p>`}
       <section class="section"><h2>Next matches</h2>
-      ${rest.length ? fixtureGroups(rest) : `<p class="empty">No other matches scheduled in the next 10 days.</p>`}</section>
+      ${soon.length ? fixtureGroups(soon) : `<p class="empty">No other matches in the next two weeks.</p>`}
+      ${later.length ? `<details class="more"><summary>Show the rest of the month (${later.length} more)</summary>${fixtureGroups(later)}</details>` : ""}</section>
+      ${(L.scorers || []).length ? `<section class="section"><h2>Top scorers</h2>${scorerBars(L.scorers)}</section>` : ""}
       <section class="section"><h2>Latest results</h2>
       ${L.recent.length ? `<ul class="results">${L.recent.slice(0, 12).map(resultItem).join("")}</ul>` : `<p class="empty">No results yet.</p>`}</section>
       <section class="section"><h2>${lg === "champions-league" ? "League phase table" : "Table"}</h2>${tableHtml(L.table, lg)}</section>`)}`;
@@ -223,20 +249,25 @@ function buildSection(P, m) {
     <p class="sub small" style="margin-top:10px">"Final" includes the adjustments below.</p></section>`;
 }
 
-function predictionCard(m, acc) {
-  const pr = m.prediction, P = pr.prediction, conf = P.confidence, adjs = P.adjustments || [];
+function predictionCard(m, acc, teams) {
+  const pr = m.prediction, P = pr.prediction, adjs = P.adjustments || [];
   const statusLabel = { measured: "applied", provisional: "applied, provisional", info: "context only" };
   const miss = pr.missing || pr.suspended || {}, doubt = pr.doubtful || {};
   const tag = side => x => ({ ...x, team: side === "home" ? m.home.short : m.away.short });
   const out = [...(miss.home || []).map(tag("home")), ...(miss.away || []).map(tag("away"))];
   const dbt = [...(doubt.home || []).map(tag("home")), ...(doubt.away || []).map(tag("away"))];
   const effCls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
+  const away = daysTo(m.kickoff);
+  const facts = [
+    `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>league games behind it${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}</span>`,
+    `<span class="fact"><b>${pr.team_news ? "Included" : "Not yet"}</b>team news${pr.team_news ? "" : " (arrives 4 days before)"}</span>`,
+    m.status === "upcoming" && away > 7 ? `<span class="fact"><b>${Math.round(away)} days</b>to kick-off: early estimate</span>` : "",
+    `<span class="fact"><b>${m.status === "upcoming" ? h(ago(pr.made_at)) : "Frozen"}</b>${m.status === "upcoming" ? "last update, frozen at kick-off" : `last update ${h(kick(pr.made_at))}`}</span>`,
+  ].join("");
   return `
     <div class="grow">${strip(m.home, m.away, P.stats.goals)}</div>
-    <p class="sub" style="margin-top:10px"><span class="pill ${h(conf.level)}">${h(conf.level)} confidence</span>
-      ${conf.reasons.length ? ` ${h(conf.reasons.join("; "))}.` : ""}
-      Based on ${P.sample.home_games} and ${P.sample.away_games} league games this season${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}.
-      ${m.status === "upcoming" ? `Updated ${h(ago(pr.made_at))}; frozen at kick-off.` : `Frozen before kick-off (last update ${h(kick(pr.made_at))}).`}</p>
+    <div class="factrow">${facts}</div>
+    ${teams ? compareSection(m, teams) : ""}
     <section class="section"><h2>Expected numbers</h2>
     <div class="grid">${Object.keys(STAT).map(s => statPanel(s, P, m, acc)).join("")}</div></section>
     ${buildSection(P, m)}
@@ -248,16 +279,34 @@ function predictionCard(m, acc) {
     ${(P.analyst_view || []).length ? `<section class="section"><h2>Analyst view</h2><div class="panel">${P.analyst_view.map(x => `<p>${h(x)}</p>`).join("")}<p class="sub small">Opinion, not part of the numbers above.</p></div></section>` : ""}`;
 }
 
-function matchHero(m) {
+function compareSection(m, teams) {
+  const [th, ta] = teams;
+  if (!th || !ta) return "";
+  const colors = teamColors(m.home, m.away);
+  const ppg = t => (t.record.overall.p ? (3 * t.record.overall.w + t.record.overall.d) / t.record.overall.p : null);
+  const av = (t, s, k) => t.averages[s].overall[k];
+  const row = (label, a, b, d = 1) => cmpRow(label, a == null ? null : +a.toFixed(d), b == null ? null : +b.toFixed(d), colors);
+  return `<section class="section"><h2>Season so far</h2><ul class="cmp">
+    ${row("Points per game", ppg(th), ppg(ta), 2)}
+    ${row("Goals scored per game", av(th, "goals", "for"), av(ta, "goals", "for"))}
+    ${row("Goals conceded per game", av(th, "goals", "against"), av(ta, "goals", "against"))}
+    ${row("Shots on target per game", av(th, "shots_on_target", "for"), av(ta, "shots_on_target", "for"))}
+    ${row("Corners per game", av(th, "corners", "for"), av(ta, "corners", "for"))}
+    ${row("Cards per game", av(th, "cards", "for"), av(ta, "cards", "for"))}
+  </ul><p class="sub small" style="margin-top:8px">League matches only, ${h(m.home.short)} on the left.</p></section>`;
+}
+
+function matchHero(m, teams) {
   const [hc, ac] = teamColors(m.home, m.away);
+  const fm = i => (teams && teams[i] && teams[i].form.last5 ? `<span class="hform">${formDots(teams[i].form.last5.results)}</span>` : "");
   const mid = m.status === "finished"
     ? `<div class="score">${m.score[0]}–${m.score[1]}</div>`
     : `<div class="vs">${h(day(m.kickoff))}<b>${h(time(m.kickoff))}</b></div>`;
   return `<section class="mhero" style="background:linear-gradient(100deg, ${css(deep(hc))} 0 49.6%, ${css(deep(ac))} 50.4% 100%)"><div class="wrap">
     <div class="mhead">
-      <div class="mteam">${disc(m.home, "lg")}<a href="#/team/${h(m.home.slug)}">${h(m.home.name)}</a></div>
+      <div class="mteam">${disc(m.home, "lg")}<a href="#/team/${h(m.home.slug)}">${h(m.home.name)}</a>${fm(0)}</div>
       ${mid}
-      <div class="mteam away">${disc(m.away, "lg")}<a href="#/team/${h(m.away.slug)}">${h(m.away.name)}</a></div></div>
+      <div class="mteam away">${disc(m.away, "lg")}<a href="#/team/${h(m.away.slug)}">${h(m.away.name)}</a>${fm(1)}</div></div>
     <p class="mmeta">${h(LEAGUES[m.comp])}${m.round ? `, ${h(m.round)}` : ""}${m.status === "finished" ? `, ${h(kick(m.kickoff || m.date))}` : ""}${m.venue ? `. ${h(m.venue)}` : ""}${m.referee ? `. Referee ${h(m.referee)}` : ""}</p>
   </div></section>`;
 }
@@ -275,10 +324,12 @@ function cmpRow(label, a, b, colors, check, conflict) {
 
 async function renderMatch(id) {
   const [m, acc] = await Promise.all([get(`match/${id}.json`), get("accuracy.json").catch(() => null)]);
+  const teams = await Promise.all([m.home.slug, m.away.slug].map(sl => get(`team/${sl}.json`).catch(() => null)));
   title(`${m.home.short} v ${m.away.short}`);
-  setNav("home");
+  setNav("league");
   if (m.status === "upcoming") {
-    app.innerHTML = matchHero(m) + wrap(m.prediction ? BANNER + predictionCard(m, acc) : `<p class="note">${h(m.note || "")}</p>`);
+    app.innerHTML = matchHero(m, teams) + wrap(m.prediction ? BANNER + predictionCard(m, acc, teams)
+      : `<p class="note">${h(m.note || "")}</p>${compareSection(m, teams)}`);
     return;
   }
   const colors = teamColors(m.home, m.away);
@@ -323,7 +374,7 @@ async function renderMatch(id) {
     };
     body += `<section class="section"><h2>Lineups</h2><div class="lineups">${lu("home")}${lu("away")}</div></section>`;
   }
-  app.innerHTML = matchHero(m) + wrap(body);
+  app.innerHTML = matchHero(m, teams) + wrap(body);
 }
 
 /* ---------------------------------------------------------------- team */
@@ -353,7 +404,9 @@ async function renderTeam(slug) {
           <div><b>${fx(A.goals.overall.for)}–${fx(A.goals.overall.against)}</b>goals a game</div>${f10 ? `<div><b>${formDots(f10.results, "")}</b>last ${f10.n}</div>` : ""}</div></div>
     </div></section>
     ${wrap(`
-    ${t.upcoming.length ? `<section><h2>Next matches</h2><div class="cards">${t.upcoming.map(fixtureCard).join("")}</div></section>` : ""}
+    <section><h2>Last ${Math.min(10, t.log.length)} games</h2><div class="panel chartp">${goalsChart(t.log, pick(t))}
+      <p class="sub small">Goals scored above the line, conceded below. Dots show the result; hover a bar for the match. All competitions.</p></div></section>
+    ${t.upcoming.length ? `<section class="section"><h2>Next matches</h2><div class="cards">${t.upcoming.map(fixtureCard).join("")}</div></section>` : ""}
     <section class="section"><h2>Season averages per game</h2>
     <div class="tscroll"><table><thead><tr><th rowspan="2">Stat</th><th class="n" colspan="2">Overall</th><th class="n" colspan="2">Home</th><th class="n" colspan="2">Away</th></tr>
       <tr><th class="n">For</th><th class="n">Against</th><th class="n">For</th><th class="n">Against</th><th class="n">For</th><th class="n">Against</th></tr></thead>
@@ -467,7 +520,7 @@ function renderAbout() {
   title("How it works");
   setNav("about");
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>How it works</h1></div></section>${wrap(`<div class="prose">
-  <p>Matchday Numbers shows past statistics and statistical estimates for upcoming La Liga and Premier League matches, plus full stats for the Champions League. It's an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
+  <p>Matchday Numbers shows past statistics and statistical estimates for every La Liga and Premier League match in the next month, plus full stats for the Champions League. It's an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
   <h2>Where the data comes from</h2>
   <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for both leagues, and referees for the Premier League.</li>
   <li><b>ESPN</b>: fixtures, kick-off times, Champions League matches, lineups, goals, assists and minutes.</li>
@@ -478,13 +531,165 @@ function renderAbout() {
   <li><b>Form, team gap and head-to-head (40%).</b> Form looks only at the last 5 games. Team gap turns the difference in points per game into more or fewer goals, corners, shots and cards, using effects measured on past seasons. Head-to-head uses up to 6 past meetings. Each view leans back toward the statistics when it has little evidence.</li>
   <li><b>Adjustments</b>, each listed on the card with its effect: derby matches (more cards, measured on past seasons), missing players (provisional: a team's expected goals drop by 40% of the player's share of its goals and assists, and a missing regular keeper or defender adds 3% to the opponent), and short rest (provisional). Referee history is shown for context only.</li>
   <li><b>Probabilities.</b> Goals use a Dixon-Coles model to get win/draw/loss, likely scores and over/under chances. Corners, cards and shots use a negative binomial distribution, which allows for more spread than a simple average suggests.</li></ol>
-  <p>Confidence is Low, Medium or High depending on how many games the numbers rest on, how much the adjustments moved them, and whether team news was available.</p>
+  <p>There's no High/Medium/Low confidence label. An earlier version had one, but on two past seasons it didn't predict which estimates turned out more accurate, so it was removed. Each estimate instead shows the plain facts: how many games it rests on, whether team news is included, and how far away kick-off is. The uncertainty itself is already in the percentages and likely ranges.</p>
   <h2>What it can't do</h2>
   <ul><li>Team news is only as good as FotMob's reports, and doubtful players aren't counted.</li>
   <li>Champions League estimates are left out: teams from different leagues can't be compared reliably yet.</li>
   <li>Corners and cards are hard to predict for anyone. The model beats league averages on them, but only slightly.</li>
   <li>Analyst views (new manager, motivation) are kept in a separate box and never mixed into the numbers.</li></ul>
   <p>Every estimate is saved in the project's public history before kick-off, so the track record can't be edited after the fact.</p></div>`)}`;
+}
+
+
+/* ---------------------------------------------------------------- home */
+function miniTable(L, n = 6) {
+  return `<div class="panel mini-t"><div class="mt-head"><h3>${h(L.name)}</h3><a href="#/league/${h(L.key)}">Full table</a></div>
+    <table><tbody>${L.table.slice(0, n).map(r => `<tr><td class="n pos-s">${r.pos}</td><td>${tlink(r.team)}</td><td>${formDots(r.form)}</td><td class="n pts">${r.pts}</td></tr>`).join("")}</tbody></table></div>`;
+}
+function goalsBars(list) {
+  const max = Math.max(...list.map(u => u.prediction.goals), 1);
+  return `<ol class="scorers">${list.map((u, i) => `<li><span class="rk">${i + 1}</span><a class="who" href="#/match/${h(u.id)}">${disc(u.home, "xs")}${disc(u.away, "xs")}<span><b>${h(u.home.short || u.home.name)} v ${h(u.away.short || u.away.name)}</b><span class="sub">${h(LTAG[u.comp])}, ${h(day(u.kickoff))}</span></span></a>
+    <span class="gbar"><span style="width:${(u.prediction.goals / max) * 100}%;background:var(--pitch)"></span></span><span class="g">${fx(u.prediction.goals)}</span><span class="as">goals</span></li>`).join("")}</ol>`;
+}
+async function renderHome() {
+  title("");
+  setNav("home");
+  const [ll, pl, cl, acc] = await Promise.all([get("league-la-liga.json"), get("league-premier-league.json"),
+    get("league-champions-league.json"), get("accuracy.json").catch(() => null)]);
+  const Ls = [ll, pl, cl];
+  const pos = {};
+  Ls.forEach(L => L.table.forEach(r => { pos[L.key + "/" + r.team.slug] = r.pos; }));
+  const all = Ls.flatMap(L => L.upcoming).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
+  const size = u => (pos[u.comp + "/" + u.home.slug] || 20) + (pos[u.comp + "/" + u.away.slug] || 20);
+  const week = all.filter(u => u.prediction && daysTo(u.kickoff) <= 7).sort((a, b) => size(a) - size(b));
+  const top = week[0], big = week.slice(1, 5);
+  const used = new Set([top, ...big].filter(Boolean).map(u => u.id));
+  const soon = all.filter(u => daysTo(u.kickoff) <= 3 && !used.has(u.id));
+  const goaly = all.filter(u => u.prediction && daysTo(u.kickoff) <= 7).sort((a, b) => b.prediction.goals - a.prediction.goals).slice(0, 5);
+  const bt = acc && acc.backtest && acc.backtest.test ? acc.backtest : null;
+  const live = acc && acc.live ? acc.live : null;
+  app.innerHTML = `
+    <section class="hero turf home-hero"><div class="wrap">
+      <h1>This week, in numbers</h1>
+      <p class="lede">Estimates for every La Liga and Premier League match in the next month, the inputs behind each one, and how often they've been right.</p>
+      <form class="bigsearch" role="search" data-search>
+        <label class="sr" for="bq">Search teams and matches</label>
+        <input id="bq" type="search" placeholder="Search a team or a match, like Real Madrid Barcelona" autocomplete="off" spellcheck="false">
+        <div class="drop" hidden></div>
+      </form>
+      ${top ? featureBlock(top, "Match of the week") : ""}
+    </div></section>
+    ${wrap(`
+      ${BANNER}
+      ${big.length ? `<section><h2>Big matches this week</h2><div class="cards">${big.map(u => fixtureCard(u, true)).join("")}</div></section>` : ""}
+      ${soon.length ? `<section class="section"><h2>Next 3 days</h2>${fixtureGroups(soon, true)}</section>` : ""}
+      <section class="section"><h2>Tables at a glance</h2><div class="trio">${Ls.map(L => miniTable(L)).join("")}</div></section>
+      <div class="duo section">
+        ${goaly.length ? `<section><h2>Most goals expected this week</h2>${goalsBars(goaly)}</section>` : ""}
+        <section><h2>Top scorers</h2>${scorerBars([...(ll.scorers || []), ...(pl.scorers || [])].sort((a, b) => b.goals - a.goals || b.assists - a.assists), 6)}</section>
+      </div>
+      ${bt ? `<section class="section"><h2>Are the estimates any good?</h2><div class="panel proof">
+        <div><b>${fx((1 - bt.test.goals.brier / bt.baseline.goals.brier) * 100, 1)}%</b><span>smaller error than league averages on win/draw/loss, tested on all ${bt.matches} league matches of 2025-26</span></div>
+        <div><b>${live && live.matches ? live.matches : 0}</b><span>live estimates scored so far, every one frozen at kick-off</span></div>
+        <div><a class="btn" href="#/accuracy">See the track record</a></div></div></section>` : ""}
+    `)}`;
+  bindSearch();
+}
+
+/* ---------------------------------------------------------------- search */
+let SEARCH = null;
+async function searchData() {
+  if (!SEARCH) {
+    const [idx, teams] = await Promise.all([get("search.json"), get("teams.json")]);
+    SEARCH = { idx, teams, T: Object.fromEntries(teams.map(t => [t.slug, t])) };
+  }
+  return SEARCH;
+}
+function runSearch(q, D) {
+  const terms = norm(q).replace(/\b(vs?|versus|against)\b/g, " ").split(/[\s\-–]+/).filter(Boolean);
+  if (!terms.length) return { teams: [], up: [], past: [] };
+  const tn = slug => (D.T[slug] ? norm(D.T[slug].name) : "");
+  // teams whose name holds every word ("real madrid", "man city"); otherwise read it as two teams ("arsenal chelsea")
+  const teams = D.teams.filter(t => terms.every(w => norm(t.name).includes(w)));
+  const slugs = new Set(teams.map(t => t.slug));
+  const hits = teams.length
+    ? D.idx.filter(x => slugs.has(x.h) || slugs.has(x.a))
+    : D.idx.filter(x => {
+      const a = tn(x.h), b = tn(x.a);
+      return terms.every(w => a.includes(w) || b.includes(w)) && terms.some(w => a.includes(w)) && terms.some(w => b.includes(w));
+    });
+  const now = Date.now();
+  return { teams, up: hits.filter(x => !x.s && new Date(x.k) > now), past: hits.filter(x => x.s).reverse() };
+}
+function searchRow(x, D) {
+  const a = D.T[x.h] || { name: x.h, slug: x.h }, b = D.T[x.a] || { name: x.a, slug: x.a };
+  const right = x.s ? `<span class="r-s">${x.s[0]}–${x.s[1]}</span>`
+    : x.p ? `<span class="sr-p"><span class="mini">${`<span style="flex:${x.p[0]};background:var(--pitch)"></span><span class="d" style="flex:${x.p[1]}"></span><span style="flex:${x.p[2]};background:#55666b"></span>`}</span><span class="tri3"><b>${pct(x.p[0])}</b><b>${pct(x.p[1])}</b><b>${pct(x.p[2])}</b></span></span>`
+      : `<span class="sub small">${x.c === "champions-league" ? "stats only" : "estimate soon"}</span>`;
+  return `<li><a class="srow" href="#/match/${h(x.id)}"><span class="r-when">${h(day(x.k))}<br><b class="ltag ${h(x.c)}">${h(LSHORT[x.c])}</b></span>
+    <span class="sr-t">${disc(a, "xs")}${h(a.name)}<span class="sub">v</span>${disc(b, "xs")}${h(b.name)}</span>${right}</a></li>`;
+}
+function bindSearch() {
+  document.querySelectorAll("[data-search]").forEach(f => {
+    if (f.dataset.bound) return;
+    f.dataset.bound = "1";
+    const input = f.querySelector("input"), drop = f.querySelector(".drop");
+    const close = () => { drop.hidden = true; };
+    input.addEventListener("input", async () => {
+      const q = input.value.trim();
+      if (q.length < 2) return close();
+      const D = await searchData();
+      const r = runSearch(q, D);
+      const ms = [...r.up.slice(0, 4), ...r.past.slice(0, 3)];
+      drop.innerHTML = (r.teams.slice(0, 3).map(t => `<a class="d-team" href="#/team/${h(t.slug)}">${disc(t, "xs")}<span>${h(t.name)}</span><span class="sub small">team</span></a>`).join("")
+        + `<ul class="sresults">${ms.map(x => searchRow(x, D)).join("")}</ul>`
+        + `<a class="d-all" href="#/search/${encodeURIComponent(q)}">${r.teams.length + r.up.length + r.past.length ? "See all results" : "No matches found. Try one team name."}</a>`);
+      drop.hidden = false;
+    });
+    input.addEventListener("keydown", e => { if (e.key === "Escape") { close(); input.blur(); } });
+    f.addEventListener("submit", e => { e.preventDefault(); const q = input.value.trim(); if (q) { close(); location.hash = `#/search/${encodeURIComponent(q)}`; } });
+    drop.addEventListener("click", () => { close(); input.value = ""; });
+    document.addEventListener("click", e => { if (!f.contains(e.target)) close(); });
+  });
+}
+async function renderSearch(q) {
+  title(`Search: ${q}`);
+  setNav("");
+  const D = await searchData();
+  const r = runSearch(q, D);
+  app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>Search</h1>
+    <form class="bigsearch" role="search" data-search><label class="sr" for="sq">Search teams and matches</label>
+    <input id="sq" type="search" value="${h(q)}" autocomplete="off" spellcheck="false"><div class="drop" hidden></div></form></div></section>
+    ${wrap(`
+      ${r.teams.length ? `<section><h2>Teams</h2><ul class="teamgrid">${r.teams.map(t => `<li><a href="#/team/${h(t.slug)}">${disc(t, "sm")}${h(t.name)}</a></li>`).join("")}</ul></section>` : ""}
+      <section class="section"><h2>Upcoming matches</h2>${r.up.length ? `<ul class="sresults big">${r.up.slice(0, 40).map(x => searchRow(x, D)).join("")}</ul>` : `<p class="empty">No upcoming matches in the next month for "${h(q)}".</p>`}</section>
+      <section class="section"><h2>Played this season</h2>${r.past.length ? `<ul class="sresults big">${r.past.slice(0, 60).map(x => searchRow(x, D)).join("")}</ul>` : `<p class="empty">No played matches for "${h(q)}" this season.</p>`}</section>
+      <p class="sub small">Tip: type two team names, like "Arsenal Chelsea", to find that fixture.</p>`)}`;
+  bindSearch();
+}
+
+/* ---------------------------------------------------------------- charts */
+function goalsChart(log, col) {
+  const g = log.slice(-10);
+  if (!g.length) return "";
+  const max = Math.max(3, ...g.map(r => Math.max(r.goals[0], r.goals[1])));
+  const W = 640, H = 220, mid = 110, bw = 30, step = (W - 40) / g.length, u = 85 / max;
+  const c = css(col || [27, 106, 76]);
+  const bars = g.map((r, i) => {
+    const x = 30 + i * step + (step - bw) / 2;
+    const f = r.goals[0] * u, a = r.goals[1] * u;
+    const res = r.result === "W" ? "var(--pitch)" : r.result === "D" ? "var(--draw)" : "var(--red)";
+    return `<g><title>${h(day(r.kickoff || r.date))} ${r.venue === "H" ? "v" : "at"} ${h(r.opp.name)}: ${r.goals[0]}–${r.goals[1]}</title>
+      <rect x="${x}" y="${mid - f}" width="${bw}" height="${f}" rx="3" fill="${c}"/>
+      <rect x="${x}" y="${mid}" width="${bw}" height="${a}" rx="3" fill="var(--draw)" opacity=".75"/>
+      ${r.goals[0] ? `<text x="${x + bw / 2}" y="${mid - f - 5}" text-anchor="middle" class="cv">${r.goals[0]}</text>` : ""}
+      ${r.goals[1] ? `<text x="${x + bw / 2}" y="${mid + a + 13}" text-anchor="middle" class="cv">${r.goals[1]}</text>` : ""}
+      <circle cx="${x + bw / 2}" cy="${H - 12}" r="5" fill="${res}"/>
+      <text x="${x + bw / 2}" y="${H - 24}" text-anchor="middle" class="cl">${h((r.opp.abbr || r.opp.short || r.opp.name || "").slice(0, 3).toUpperCase())}</text></g>`;
+  }).join("");
+  return `<svg class="gchart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Goals scored and conceded in the last ${g.length} games">
+    <line x1="24" x2="${W - 8}" y1="${mid}" y2="${mid}" stroke="var(--line)"/>
+    <text x="4" y="${mid - 70}" class="cl">For</text><text x="4" y="${mid + 78}" class="cl">Against</text>${bars}</svg>`;
 }
 
 /* ---------------------------------------------------------------- router */
@@ -496,11 +701,12 @@ async function route() {
     else if (parts[0] === "teams") await renderTeams();
     else if (parts[0] === "accuracy") await renderAccuracy();
     else if (parts[0] === "about") renderAbout();
-    else {
-      let lg = parts[0] === "league" && LEAGUES[parts[1]] ? parts[1] : null;
+    else if (parts[0] === "search") await renderSearch(decodeURIComponent(parts.slice(1).join("/")));
+    else if (parts[0] === "league") {
+      let lg = LEAGUES[parts[1]] ? parts[1] : null;
       if (!lg) { try { lg = localStorage.getItem("league"); } catch (e) { lg = null; } }
       await renderLeague(LEAGUES[lg] ? lg : "la-liga");
-    }
+    } else await renderHome();
   } catch (e) {
     app.innerHTML = wrap(`<h1 style="margin-top:28px">Page not found</h1><p>This page doesn't exist or its data hasn't been published yet. <a href="#/">Go to matches</a>.</p><p class="sub small">${h(e.message)}</p>`);
   }
@@ -520,6 +726,7 @@ async function boot() {
     document.getElementById("freshness").textContent = "Data freshness unknown.";
   }
   window.addEventListener("hashchange", route);
+  bindSearch();
   route();
 }
 boot();

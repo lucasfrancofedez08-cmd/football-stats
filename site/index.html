@@ -19,11 +19,17 @@
       <svg width="30" height="22" viewBox="0 0 30 22" aria-hidden="true"><rect x="1" y="1" width="28" height="20" rx="2" fill="none" stroke="#eaf3ee" stroke-width="1.8"/><path d="M15 1v20" stroke="#eaf3ee" stroke-width="1.8"/><circle cx="15" cy="11" r="4" fill="none" stroke="#f2c14e" stroke-width="1.8"/><path d="M1 7h4v8H1M29 7h-4v8h4" fill="none" stroke="#eaf3ee" stroke-width="1.8"/></svg>
       Matchday Numbers</a>
     <nav class="nav" aria-label="Main">
-      <a href="#/" data-nav="home">Matches</a>
+      <a href="#/" data-nav="home">Home</a>
+      <a href="#/league" data-nav="league">Leagues</a>
       <a href="#/teams" data-nav="teams">Teams</a>
       <a href="#/accuracy" data-nav="accuracy">Track record</a>
       <a href="#/about" data-nav="about">How it works</a>
     </nav>
+    <form class="hsearch" role="search" data-search>
+      <label class="sr" for="hq">Search teams and matches</label>
+      <input id="hq" type="search" placeholder="Search a team or match" autocomplete="off" spellcheck="false">
+      <div class="drop" hidden></div>
+    </form>
   </div>
 </header>
 <main id="app" tabindex="-1"><div class="wrap"><p class="loading">Loading…</p></div></main>

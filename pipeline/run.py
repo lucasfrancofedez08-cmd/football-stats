@@ -24,7 +24,7 @@ from pipeline.sources import LEAGUES  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 HISTORY = os.path.join(DATA, "history")
-UPCOMING_DAYS = 10
+UPCOMING_DAYS = 31
 DOMESTIC = ["premier-league", "la-liga"]
 
 

@@ -130,7 +130,10 @@ class Predictor:
         out["adjustments"] = [a.to_dict() for a in adjs]
         out["sample"] = {"home_games": info["goals"]["home_n"], "away_games": info["goals"]["away_n"],
                          "home_prior": info["goals"]["home_prior"], "away_prior": info["goals"]["away_prior"]}
-        out["confidence"] = confidence(min_n, mult, ctx)
+        # What the estimate rests on. (A High/Medium/Low label was removed: in testing it did not
+        # predict accuracy, so the card shows these plain facts instead.)
+        out["basis"] = {"min_games": min_n, "team_news": bool(ctx.get("injuries_known")),
+                        "adjusted_max_pct": round(max(abs(m - 1) for pair in mult.values() for m in pair) * 100, 1)}
         out["blend"] = {"base_weight": 1 - w, "views_weight": w, **(vsum or {})}
         out["analyst_view"] = ctx.get("analyst_view", [])
         return out
@@ -164,22 +167,3 @@ class Predictor:
         if i["home_n"] < 10 or i["away_n"] < 10:
             lines.append(f"Small sample: blended with {i['home_prior'] if i['home_n'] < 10 else i['away_prior']} numbers")
         return lines
-
-
-def confidence(min_games, mult, ctx):
-    moved = max(abs(m - 1) for pair in mult.values() for m in pair)
-    missing_data = not ctx.get("injuries_known")
-    if min_games < 4 or moved > 0.2:
-        level = "Low"
-    elif min_games >= 10 and moved < 0.1 and not missing_data:
-        level = "High"
-    else:
-        level = "Medium"
-    reasons = []
-    if min_games < 10:
-        reasons.append(f"only {min_games} games this season for one side")
-    if moved >= 0.1:
-        reasons.append(f"adjustments moved a number by {moved:.0%}")
-    if missing_data:
-        reasons.append("no recent injury news checked for one side")
-    return {"level": level, "reasons": reasons}

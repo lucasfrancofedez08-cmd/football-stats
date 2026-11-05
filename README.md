@@ -10,7 +10,7 @@ A GitHub Actions workflow (`.github/workflows/update.yml`) runs every 3 hours:
 
 1. Downloads results and match stats from **football-data.co.uk**, fixtures, lineups, goals and Champions League matches from **ESPN's public feed**, and team news from **FotMob**.
 2. Cross-checks the two sources stat by stat. A stat the sources disagree on is shown with both values and left out of the model for that match.
-3. Makes predictions for league matches in the next 10 days. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
+3. Makes predictions for every league match in the next 31 days. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
 4. Writes the site data (`site/data/`) and publishes `site/` to GitHub Pages.
 
 Team news (injured and suspended players) comes from **FotMob's public feed** for matches in the next 4 days. When FotMob has nothing, suspensions are worked out from cards. `data/overrides/injuries.json` is a manual override that is merged on top.
