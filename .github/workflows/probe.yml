@@ -1,0 +1,27 @@
+name: probe-leagues
+on:
+  push:
+    branches: [main]
+    paths: ["tools/probe_leagues.py", ".github/workflows/probe.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/probe_leagues.py
+      - name: Save report and history files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add probe data/history
+          git commit -q -m "Probe: league sources and history" || echo "no changes"
+          git pull -q --rebase -X theirs origin main && git push -q
