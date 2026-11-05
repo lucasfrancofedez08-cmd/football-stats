@@ -17,6 +17,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main   # latest data, not the commit that triggered a queued run
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -28,7 +30,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data site/data
           git commit -q -m "Data update $(date -u +%Y-%m-%dT%H:%MZ)" || echo "no changes"
-          git pull -q --rebase origin main && git push -q
+          # this run's data is the newest; keep it if a concurrent commit touched the same files
+          git pull -q --rebase -X theirs origin main && git push -q
       - name: Publish website
         uses: peaceiris/actions-gh-pages@v4
         with:
