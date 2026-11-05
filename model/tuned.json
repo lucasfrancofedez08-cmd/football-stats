@@ -1,0 +1,36 @@
+{
+ "params": {
+  "recent_n": 6,
+  "recent_weight": 2.0,
+  "shrink_k": {
+   "goals": 20.0,
+   "corners": 30.0,
+   "cards": 30.0,
+   "shots": 14.0,
+   "shots_on_target": 30.0
+  },
+  "prior_regress": {
+   "goals": 0.9,
+   "corners": 0.5,
+   "cards": 0.5,
+   "shots": 0.75,
+   "shots_on_target": 0.75
+  },
+  "venue_blend": 0.0,
+  "goals_sot_mix": 0.5,
+  "league_prior_matches": 80.0,
+  "dc_rho": -0.12,
+  "nb_alpha": {
+   "goals": 0.0,
+   "corners": 0.0101,
+   "cards": 0.0323,
+   "shots": 0.011,
+   "shots_on_target": 0.0097
+  }
+ },
+ "tuning": {
+  "momentum_coef": 0.0,
+  "derby_cards": 1.128,
+  "referee_k": 1000000000.0
+ }
+}
