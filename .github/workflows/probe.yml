@@ -1,0 +1,41 @@
+name: probe-sources
+on:
+  push:
+    paths: ['.github/workflows/probe.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch samples from each source
+        run: |
+          mkdir -p probe
+          UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36"
+          get() { code=$(curl -sSL -m 30 -A "$UA" -o "probe/$1" -w "%{http_code}" "$2" || echo fail); echo "$code $(stat -c%s probe/$1 2>/dev/null) $1 $2" >> probe/status.txt; }
+          get fd_E0.csv  https://www.football-data.co.uk/mmz4281/2627/E0.csv
+          get fd_SP1.csv https://www.football-data.co.uk/mmz4281/2627/SP1.csv
+          get fd_fixtures.csv https://www.football-data.co.uk/fixtures.csv
+          E=https://site.api.espn.com/apis/site/v2/sports/soccer
+          for lg in eng.1 esp.1 uefa.champions; do
+            get espn_${lg}_scoreboard.json "$E/$lg/scoreboard"
+            get espn_${lg}_range.json "$E/$lg/scoreboard?dates=20261020-20261104&limit=200"
+            get espn_${lg}_teams.json "$E/$lg/teams"
+          done
+          EID=$(python3 -c "import json;d=json.load(open('probe/espn_eng.1_range.json'));print([e['id'] for e in d['events'] if e['status']['type']['completed']][-1])" || true)
+          [ -n "$EID" ] && get espn_eng1_summary_done.json "$E/eng.1/summary?event=$EID"
+          UID_=$(python3 -c "import json;d=json.load(open('probe/espn_eng.1_scoreboard.json'));print([e['id'] for e in d['events'] if not e['status']['type']['completed']][0])" || true)
+          [ -n "$UID_" ] && get espn_eng1_summary_upcoming.json "$E/eng.1/summary?event=$UID_"
+          TID=$(python3 -c "import json;d=json.load(open('probe/espn_eng.1_teams.json'));print(d['sports'][0]['leagues'][0]['teams'][0]['team']['id'])" || true)
+          [ -n "$TID" ] && get espn_eng1_team_roster.json "$E/eng.1/teams/$TID/roster"
+          [ -n "$TID" ] && get espn_core_injuries.json "https://sports.core.api.espn.com/v2/sports/soccer/leagues/eng.1/teams/$TID/injuries"
+          cat probe/status.txt
+      - name: Commit samples
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add probe
+          git commit -m "Probe: source samples" || echo "nothing to commit"
+          git push
