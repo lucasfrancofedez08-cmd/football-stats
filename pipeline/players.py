@@ -72,7 +72,9 @@ def likely_suspended(league, team, players, matches):
         total = sum(x[1] for x in log)
         before = total - y_last
         n = len(games)
-        if league == "premier-league":
+        if league in ("champions-league", "europa-league", "conference-league"):
+            hit = (before < 3 <= total) or (total >= 5 and total % 2 == 1 and before < total)  # UEFA: 3rd, then 5th, 7th...
+        elif league == "premier-league":
             hit = (before < 5 <= total and n <= 19) or (before < 10 <= total and n <= 32)
         else:  # La Liga's rule (every 5th yellow); other leagues' rules differ in detail, so this is approximate
             hit = total // 5 > before // 5

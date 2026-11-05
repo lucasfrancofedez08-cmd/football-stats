@@ -1,6 +1,6 @@
 # Matchday Numbers
 
-Past match statistics and statistical estimates for upcoming matches in seven leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Primeira Liga), plus full stats for the Champions, Europa and Conference League. An information tool, not betting advice: every estimate shows its inputs, its uncertainty and its track record.
+Past match statistics and statistical estimates for upcoming matches in seven leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Primeira Liga), and the Champions, Europa and Conference League. An information tool, not betting advice: every estimate shows its inputs, its uncertainty and its track record.
 
 **Website:** https://lucasfrancofedez08-cmd.github.io/football-stats/
 
@@ -24,6 +24,10 @@ Team news (injured and suspended players) comes from **FotMob's public feed** fo
 - Then separate, listed adjustments (derby cards, missing players, short rest), and Dixon-Coles for goals / negative binomial for corners, cards and shots.
 
 `backtest/run.py` tunes on 2023-24 and 2024-25 and tests once on 2025-26 (2,364 matches across the seven leagues, walk-forward), with a per-league report. A league only gets estimates (`PREDICTED` in `pipeline/sources.py`) if it beats league averages on win/draw/loss and goals. Results in `backtest/results.json`; tuned parameters in `model/tuned.json`. On the test season the model beats league averages on every stat; the margin is large for win/draw/loss and shots, small for corners and cards. The 60/40 mix scores almost the same as the base alone (slightly better on four stats, slightly worse on cards). Referee history did not improve accuracy, so it is shown for context only.
+
+### European competitions
+
+`model/europe.py` — the same 60/40 split with a cross-league base: one penalised, time-weighted Poisson rating model per stat, fitted on the seven leagues (football-data.co.uk), the league and qualifying games of every club in Europe (ESPN team schedules, results only) and the European matches (ESPN, with stats). Club ratings shrink toward their league's level; European results set the league levels. The 40% is form (last 5 games, any competition), strength gap and head-to-head. `backtest/europe.py` tunes on 2024-25 and tests on the 531 European matches of 2025-26 (`backtest/results_europe.json`). History comes from `tools/collect_europe.py` (workflow `collect-europe`); at each season change `pipeline/run.py` rolls the finished season into `data/history` itself.
 
 ## Layout
 

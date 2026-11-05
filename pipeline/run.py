@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from model.data import load_file  # noqa: E402
 from model.predict import Predictor  # noqa: E402
-from pipeline import merge, players, predictions, site_data, sources, teams  # noqa: E402
+from pipeline import europe, merge, players, predictions, site_data, sources, teams  # noqa: E402
 from pipeline.sources import DOMESTIC, EUROPE, LEAGUES, PREDICTED  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +45,7 @@ def jsave(path, obj):
 
 def model_version():
     h = hashlib.sha256()
-    for p in sorted(glob.glob(os.path.join(ROOT, "model", "*.py"))) + [os.path.join(ROOT, "model", "tuned.json")]:
+    for p in sorted(glob.glob(os.path.join(ROOT, "model", "*.py"))) + sorted(glob.glob(os.path.join(ROOT, "model", "tuned*.json"))):
         with open(p, "rb") as f:
             h.update(f.read())
     return h.hexdigest()[:10]
@@ -68,7 +68,8 @@ def history_seasons(league, season):
 
 
 def roll_history(season, sdir):
-    """When a new season starts, keep last season's final football-data.co.uk file as history."""
+    """When a new season starts, keep last season's final data as history: football-data.co.uk files,
+    and the European matches and club schedules the European model learns from."""
     y = int(season[:2])
     prev = f"{y - 1:02d}{y:02d}"
     for lg in DOMESTIC:
@@ -76,6 +77,17 @@ def roll_history(season, sdir):
         src = os.path.join(DATA, "state", prev, f"fd_{lg}.csv")
         if not os.path.exists(dst) and os.path.exists(src):
             shutil.copy(src, dst)
+    pdir = os.path.join(DATA, "state", prev)
+    dst = os.path.join(HISTORY, f"europe_{prev}.json")
+    if not os.path.exists(dst) and os.path.exists(os.path.join(pdir, "espn_events_champions-league.json")):
+        rows = []
+        for lg in EUROPE:
+            ev = jload(os.path.join(pdir, f"espn_events_{lg}.json"), {})
+            summ = jload(os.path.join(pdir, f"espn_summaries_{lg}.json"), {})
+            rows += europe.live_rows(lg, merge.europe_records(lg, list(ev.values()), summ, prev), ev)
+        jsave(dst, rows)
+        clubs = jload(os.path.join(pdir, "europe_clubs.json"), {}).get("games", {})
+        jsave(os.path.join(HISTORY, f"europe_clubs_{prev}.json"), clubs)
 
 
 def _month(d):
@@ -301,10 +313,10 @@ def main():
     overrides = jload(os.path.join(DATA, "overrides", "injuries.json"), {})
     upcoming = [e for lg in PREDICTED for e in events[lg].values()
                 if e.get("status") == "pre" and now < datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00")) < now + timedelta(days=4)]
-    league_of = {e["espn_id"]: lg for lg in DOMESTIC for e in events[lg].values()}
+    league_of = {e["espn_id"]: lg for lg in LEAGUES for e in events[lg].values()}
     fm_ids = fotmob_ids(os.path.join(sdir, "fotmob_ids.json"), upcoming, league_of, now)
     made = frozen = 0
-    for lg in PREDICTED:
+    for lg in [x for x in PREDICTED if x in DOMESTIC]:
         made_lg = made
         prev = history_seasons(lg, season)
         predictor = Predictor(lg, prev)
@@ -354,10 +366,64 @@ def main():
                 log["errors"].append(f"prediction {lg} {e['espn_id']}: {ex!r}")
                 traceback.print_exc()
         log["leagues"][lg]["predictions"] = made - made_lg
+    # ------------------------------------------------------------ 7b. European competitions (cross-league model)
+    eu_pred = [lg for lg in EUROPE if lg in PREDICTED]
+    ep = None
+    if eu_pred:
+        try:
+            ep, _ = europe.build(season, now, fd, matches, events, team_map, sdir, log, jload, jsave)
+        except Exception as ex:  # the league estimates must still publish
+            log["errors"].append(f"european model: {ex!r}")
+            traceback.print_exc()
+    if ep:
+        dom_of = {t["espn_id"]: (dl, n) for dl in DOMESTIC for n, t in (team_map.get(dl) or {}).items()}
+        for lg in eu_pred:
+            made_lg = made
+            for e in events[lg].values():
+                path = os.path.join(pdir, lg, f"{e['espn_id']}.json")
+                ko = datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00"))
+                if e.get("status") != "pre" or ko <= now:
+                    frozen += os.path.exists(path)
+                    continue
+                if ko - now > timedelta(days=UPCOMING_DAYS):
+                    continue
+                if not e["home"].get("espn_id") or not e["away"].get("espn_id"):
+                    continue  # knockout slot whose teams aren't known yet
+                ctx, known = {}, True
+                news = sources.fotmob_unavailable(fm_ids[e["espn_id"]]) if ko - now < timedelta(days=4) and e["espn_id"] in fm_ids else None
+                for side in ("home", "away"):
+                    eid = e[side]["espn_id"]
+                    if eid in dom_of:
+                        dl, n = dom_of[eid]
+                        sq = squad[dl].get(n, {})
+                    else:
+                        sq = squad[lg].get(eid, {})
+                    ctx[f"{side}_squad"] = sq
+                    out, doubtful, ok = team_news(news[side] if news else None, sq, None, today)
+                    if not ok:
+                        eq = squad[lg].get(eid, {})
+                        out = players.likely_suspended(lg, eid, eq, matches[lg]) if eq else []
+                    known = known and ok
+                    ctx[f"{side}_missing"] = out
+                    ctx[f"{side}_doubtful"] = doubtful
+                    if ko - now < timedelta(days=3):
+                        last = sources.espn_team_last_match(eid, e["kickoff"])
+                        if last:
+                            lko = datetime.fromisoformat(last[0].replace("Z", "+00:00"))
+                            ctx[f"{side}_rest_days"] = (ko.date() - lko.date()).days
+                ctx["injuries_known"] = known
+                labels = {"home": e["home"]["name"], "away": e["away"]["name"]}
+                try:
+                    jsave(path, europe.make(ep, lg, e, ctx, labels, now.isoformat(), version))
+                    made += 1
+                except Exception as ex:
+                    log["errors"].append(f"prediction {lg} {e['espn_id']}: {ex!r}")
+                    traceback.print_exc()
+            log["leagues"][lg]["predictions"] = made - made_lg
     log["predictions"] = {"made_or_updated": made, "frozen_total": frozen}
 
     # ------------------------------------------------------------ 8. score frozen predictions
-    by_id = {m.get("espn_id"): m for lg in DOMESTIC for m in matches[lg] if m.get("espn_id")}
+    by_id = {m.get("espn_id"): m for lg in LEAGUES for m in matches[lg] if m.get("espn_id")}
     scored = []
     for path in glob.glob(os.path.join(DATA, "predictions", "*", "*", "*.json")):
         p = jload(path, None)

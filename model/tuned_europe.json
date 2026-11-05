@@ -1,0 +1,40 @@
+{
+ "rating": {
+  "half_life": 400.0,
+  "tau": 0.15,
+  "sigma": 0.6
+ },
+ "tuning": {
+  "europe_gap_coef": {
+   "goals": [
+    0.3577,
+    -0.3803
+   ],
+   "corners": [
+    0.3239,
+    -0.3498
+   ],
+   "cards": [
+    -0.1542,
+    0.0129
+   ],
+   "shots": [
+    0.3267,
+    -0.3286
+   ],
+   "shots_on_target": [
+    0.4131,
+    -0.3858
+   ]
+  },
+  "europe_form_k": 20.0,
+  "europe_h2h_k": 3.0,
+  "europe_nb_alpha": {
+   "goals": 0.0,
+   "corners": 0.0367,
+   "cards": 0.0611,
+   "shots": 0.0245,
+   "shots_on_target": 0.025
+  }
+ }
+}

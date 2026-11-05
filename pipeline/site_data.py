@@ -319,6 +319,18 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
               "baseline_objective_x1000": {k: v["objective"] * 1000 for k, v in b["baseline"].items()},
               "pure_objective_x1000": {k: v["objective"] * 1000 for k, v in b.get("pure_stats", {}).items()},
               "calibration": b["calibration"], "tuning": b["tuning"], "adjustment_tests": b["adjustment_tests"]}
+    epath = os.path.join(root, "backtest", "results_europe.json")
+    if bt and os.path.exists(epath):
+        with open(epath) as f:
+            e = json.load(f)
+        for k, v in e.get("by_comp", {}).items():
+            if k in PREDICTED:
+                bt["by_league"][k] = {"matches": v["matches"], "brier_1x2": v["brier_1x2"], "baseline_brier_1x2": v["baseline_brier_1x2"],
+                                      "gain_x1000": {st: (x["baseline_objective"] - x["objective"]) * 1000 for st, x in v["stats"].items()},
+                                      "mix_vs_pure_x1000": {st: (x["pure_objective"] - x["objective"]) * 1000 for st, x in v["stats"].items()},
+                                      "gain_pct": {st: (1 - x["objective"] / x["baseline_objective"]) * 100 for st, x in v["stats"].items()}}
+        if any(k in PREDICTED for k in EUROPE):
+            bt["europe"] = {"matches": e["matches"], "brier": e["test"]["goals"]["brier"], "baseline_brier": e["baseline"]["goals"]["brier"]}
     recent = []
     for p in sorted(scored, key=lambda p: p["kickoff"], reverse=True)[:60]:
         r = p["result"]

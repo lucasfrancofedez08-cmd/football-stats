@@ -33,10 +33,10 @@ LEAGUES = {
 DOMESTIC = [k for k, v in LEAGUES.items() if v["kind"] == "domestic"]
 # leagues whose estimates passed the backtest (beat league averages on win/draw/loss and goals in 2025-26,
 # see backtest/results.json "by_league"); a league that fails is removed here and shows stats only
-PREDICTED = list(DOMESTIC)
+PREDICTED = list(DOMESTIC) + ["champions-league", "europa-league", "conference-league"]  # Europe: backtest/results_europe.json
 EUROPE = [k for k, v in LEAGUES.items() if v["kind"] == "europe"]
 FOTMOB = "https://www.fotmob.com/api/data"
-FOTMOB_LEAGUE = {k: LEAGUES[k]["fotmob"] for k in DOMESTIC}
+FOTMOB_LEAGUE = {k: v["fotmob"] for k, v in LEAGUES.items()}
 
 CALLS = {"espn": 0, "fd": 0, "fotmob": 0, "errors": []}
 
@@ -246,6 +246,36 @@ def fotmob_unavailable(match_id):
         out[side] = [{"name": u.get("name"), "type": (u.get("unavailability") or {}).get("type"),
                       "expected_return": (u.get("unavailability") or {}).get("expectedReturn")}
                      for u in team.get("unavailable") or []]
+    return out
+
+
+def espn_team_schedule(team_id, season_year):
+    """Every match of a club in one season (all competitions), results only."""
+    data = fetch(f"{ESPN}/all/teams/{team_id}/schedule?season={season_year}", "espn")
+    if not data:
+        return None
+    out = []
+    for e in json.loads(data).get("events", []):
+        comp = e["competitions"][0]
+        st = (comp.get("status") or e.get("status") or {}).get("type", {})
+        cs = {c.get("homeAway"): c for c in comp.get("competitors", [])}
+        if "home" not in cs or "away" not in cs:
+            continue
+
+        def score(c):
+            v = c.get("score")
+            if isinstance(v, dict):
+                v = v.get("value", v.get("displayValue"))
+            try:
+                return int(float(v))
+            except (TypeError, ValueError):
+                return None
+        lg = e.get("league") or {}
+        out.append({"id": e["id"], "date": e["date"], "league": lg.get("slug") or lg.get("abbreviation"),
+                    "completed": bool(st.get("completed")),
+                    "home": {"id": cs["home"]["team"]["id"], "name": cs["home"]["team"].get("displayName")},
+                    "away": {"id": cs["away"]["team"]["id"], "name": cs["away"]["team"].get("displayName")},
+                    "hg": score(cs["home"]), "ag": score(cs["away"])})
     return out
 
 

@@ -122,7 +122,7 @@ function fixtureCard(u, showComp = false) {
        <div class="fc-exp"><div><b>${fx(p.goals)}</b>goals</div><div><b>${fx(p.corners)}</b>corners</div><div><b>${fx(p.cards)}</b>cards</div></div>`
     : `<div class="fc-team">${disc(u.home)}<span class="nm">${h(u.home.name)}</span><span></span></div>
        <div class="fc-team">${disc(u.away)}<span class="nm">${h(u.away.name)}</span><span></span></div>
-       <p class="fc-none">${EUROPE.has(u.comp) ? "Stats only for this competition" : "Estimate appears closer to kick-off"}</p>`;
+       <p class="fc-none">Estimate appears closer to kick-off</p>`;
   return `<a class="fcard" style="--hc:${css(hc)};--ac:${css(ac)}" href="#/match/${h(u.id)}">
     <div class="fc-top"><span>${showComp ? `<b class="ltag ${h(u.comp)}">${h(LSHORT[u.comp])}</b> ` : ""}${h(time(u.kickoff))}${u.round ? `, ${h(u.round)}` : ""}</span>${factTag(u)}</div>
     ${body}</a>`;
@@ -186,9 +186,7 @@ async function renderLeague(lg) {
       ${featured}
     </div></section>
     ${wrap(`
-      ${L.predictions_available ? BANNER : EUROPE.has(lg)
-        ? `<p class="note">${h(L.name)}: full match stats and results. Estimates are left out, because teams from different leagues can't be compared reliably yet.</p>`
-        : `<p class="note">${h(L.name)}: full match stats and results. Estimates for this league are switched off because they didn't beat league averages in testing.</p>`}
+      ${L.predictions_available ? BANNER : `<p class="note">${h(L.name)}: full match stats and results. Estimates for this competition are switched off because they didn't beat the plain average in testing.</p>`}
       <section class="section"><h2>Next matches</h2>
       ${soon.length ? fixtureGroups(soon) : `<p class="empty">No other matches in the next two weeks.</p>`}
       ${later.length ? `<details class="more"><summary>Show the rest of the month (${later.length} more)</summary>${fixtureGroups(later)}</details>` : ""}</section>
@@ -241,8 +239,9 @@ function statPanel(stat, P, m, acc) {
 function buildSection(P, m) {
   const B = P.blend;
   if (!B || B.views_weight == null || !P.stats.goals.views) return "";
+  const eu = EUROPE.has(m.comp);
   const w = B.views_weight, W = B.weights || { form: 0.4, gap: 0.35, h2h: 0.25 };
-  const parts = [["b", "Past statistics", 1 - w], ["v1", "Form", w * W.form], ["v2", "Team gap", w * W.gap], ["v3", "Head-to-head", w * W.h2h]];
+  const parts = [["b", eu ? "Ratings" : "Past statistics", 1 - w], ["v1", "Form", w * W.form], ["v2", eu ? "Strength gap" : "Team gap", w * W.gap], ["v3", "Head-to-head", w * W.h2h]];
   const tot = (s, k) => (s.views ? s.views[k][0] + s.views[k][1] : null);
   const rows = Object.keys(STAT).map(k => {
     const s = P.stats[k];
@@ -251,12 +250,18 @@ function buildSection(P, m) {
   const nm = k => (k === P.home ? m.home.short : k === P.away ? m.away.short : k);
   const meet = (B.h2h || []).map(x => `<li>${h(day(x.date))}: ${h(nm(x.home))} ${x.score[0]}–${x.score[1]} ${h(nm(x.away))}</li>`).join("");
   const gm = P.stats.goals.view_meta || {};
+  const explain = eu
+    ? `60% comes from ratings that put every club on one scale. They're built from all league, cup-qualifier and European games of the last three seasons, with older games counting less. European results are what make leagues comparable. 40% comes from form over the last 5 games in any competition, the strength gap between the teams, and past meetings.`
+    : `60% comes from season-long statistics. 40% comes from three other views: form over the last 5 games, the quality gap between the teams (points per game), and past meetings. Each view leans back toward the statistics when it has little evidence.`;
+  const gapLine = eu && B.strength
+    ? `Strength rating (0 is an average club in our data, higher is stronger): ${h(m.home.short)} <b>${sgn(B.strength[0], 2)}</b>, ${h(m.away.short)} <b>${sgn(B.strength[1], 2)}</b>. Form uses each team's last ${gm.form_games ? Math.min(...gm.form_games) : 5} games.`
+    : B.ppg ? `Points per game: ${h(m.home.short)} <b>${fx(B.ppg[0], 2)}</b>, ${h(m.away.short)} <b>${fx(B.ppg[1], 2)}</b> (gap ${sgn(B.gap, 2)}). Form uses the last ${gm.form_games ? Math.min(...gm.form_games) : 5} league games.` : "";
   return `<section class="section"><h2>How the numbers were built</h2>
-    <div class="split" aria-label="Weights">${parts.map(([c, l, v]) => `<span class="${c}" style="flex:${v}" title="${h(l)} ${pct(v)}">${v >= 0.09 ? `${h(l)} ${pct(v)}` : pct(v)}</span>`).join("")}</div>
-    <p class="sub small">60% comes from season-long statistics. 40% comes from three other views: form over the last 5 games, the quality gap between the teams (points per game), and past meetings. Each view leans back toward the statistics when it has little evidence.</p>
-    <div class="tscroll build"><table><thead><tr><th>Total, both teams</th><th class="n">Past stats</th><th class="n">Form</th><th class="n">Team gap</th><th class="n">Head-to-head</th><th class="n">Mix</th><th class="n">Final</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <p class="small" style="margin-top:12px">Points per game: ${h(m.home.short)} <b>${fx(B.ppg[0], 2)}</b>, ${h(m.away.short)} <b>${fx(B.ppg[1], 2)}</b> (gap ${sgn(B.gap, 2)}). Form uses the last ${gm.form_games ? Math.min(...gm.form_games) : 5} league games.
-    ${meet ? ` Last ${(B.h2h || []).length} meetings:` : " No meetings in the last five seasons."}</p>
+    <div class="split" aria-label="Weights">${parts.map(([c, l, v]) => `<span class="${c}" style="flex:${v}" title="${h(l)} ${pct(v)}">${v >= 0.12 ? `${h(l)} ${pct(v)}` : pct(v)}</span>`).join("")}</div>
+    <p class="sub small">${explain}</p>
+    <div class="tscroll build"><table><thead><tr><th>Total, both teams</th><th class="n">${eu ? "Ratings" : "Past stats"}</th><th class="n">Form</th><th class="n">${eu ? "Strength gap" : "Team gap"}</th><th class="n">Head-to-head</th><th class="n">Mix</th><th class="n">Final</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="small" style="margin-top:12px">${gapLine}
+    ${meet ? ` Last ${(B.h2h || []).length} meetings:` : ` No meetings in the ${eu ? "last three seasons" : "last five seasons"}.`}</p>
     ${meet ? `<ul class="h2h">${meet}</ul>` : ""}
     <p class="sub small" style="margin-top:10px">"Final" includes the adjustments below.</p></section>`;
 }
@@ -271,7 +276,9 @@ function predictionCard(m, acc, teams) {
   const effCls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
   const away = daysTo(m.kickoff);
   const facts = [
-    `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>league games behind it${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}</span>`,
+    EUROPE.has(m.comp)
+      ? `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>games behind the ratings, all competitions</span>`
+      : `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>league games behind it${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}</span>`,
     `<span class="fact"><b>${pr.team_news ? "Included" : "Not yet"}</b>team news${pr.team_news ? "" : " (arrives 4 days before)"}</span>`,
     m.status === "upcoming" && away > 7 ? `<span class="fact"><b>${Math.round(away)} days</b>to kick-off: early estimate</span>` : "",
     `<span class="fact"><b>${m.status === "upcoming" ? h(ago(pr.made_at)) : "Frozen"}</b>${m.status === "upcoming" ? "last update, frozen at kick-off" : `last update ${h(kick(pr.made_at))}`}</span>`,
@@ -305,7 +312,7 @@ function compareSection(m, teams) {
     ${row("Shots on target per game", av(th, "shots_on_target", "for"), av(ta, "shots_on_target", "for"))}
     ${row("Corners per game", av(th, "corners", "for"), av(ta, "corners", "for"))}
     ${row("Cards per game", av(th, "cards", "for"), av(ta, "cards", "for"))}
-  </ul><p class="sub small" style="margin-top:8px">League matches only, ${h(m.home.short)} on the left.</p></section>`;
+  </ul><p class="sub small" style="margin-top:8px">${[th, ta].map(t => (t.domestic === false ? `${h(t.name)}: ${h(LEAGUES[t.league] || "European")} games only (its league isn't covered here)` : `${h(t.name)}: league matches`)).join(". ")}. ${h(m.home.short)} on the left.</p></section>`;
 }
 
 function matchHero(m, teams) {
@@ -515,14 +522,15 @@ async function renderAccuracy() {
     body += `<section class="section"><h2>Tested on last season</h2>
       <p>Tuned on 2023-24 and 2024-25, then run once over all ${bt.matches} matches of 2025-26 in ${h((bt.leagues || []).join(", "))}, each estimated using only games played before it. This is a test, not a live record.</p>
       <p>Win/draw/loss Brier score <b>${fx(g.brier, 3)}</b> vs ${fx(gb.brier, 3)} for league averages, ${fx((1 - g.brier / gb.brier) * 100, 1)}% better.</p>
+      ${bt.europe ? `<p>European competitions were tested the same way: tuned on 2024-25, then run once over ${bt.europe.matches} Champions, Europa and Conference League matches of 2025-26. Win/draw/loss Brier score <b>${fx(bt.europe.brier, 3)}</b> vs ${fx(bt.europe.baseline_brier, 3)} for the plain European average, ${fx((1 - bt.europe.brier / bt.europe.baseline_brier) * 100, 1)}% better.</p>` : ""}
       ${Object.keys(mo).length ? duel(mo, bo) : ""}
       ${Object.keys(po).length ? `<h3 style="margin-top:22px">The 60/40 mix vs statistics alone</h3>
         <p class="small">Estimates use 60% past statistics and 40% form, team gap and head-to-head. On the test season, the mix compared with statistics alone like this (log loss, lower is better):</p>
         <div class="tscroll"><table><thead><tr><th>Stat</th><th class="n">60/40 mix</th><th class="n">Statistics alone</th><th class="n">Difference</th></tr></thead><tbody>
         ${Object.keys(STAT).map(s => po[s] != null ? `<tr><td>${STAT[s]}</td><td class="n">${fx(mo[s] / 1000, 4)}</td><td class="n">${fx(po[s] / 1000, 4)}</td><td class="n">${sgn((mo[s] - po[s]) / po[s] * 100, 2)}%</td></tr>` : "").join("")}
         </tbody></table></div><p class="sub small" style="margin-top:6px">Almost a tie. The mix is slightly better on ${h(better.join(", ") || "nothing")}${worse.length ? ` and slightly worse on ${h(worse.join(", "))}` : ""}.</p>` : ""}
-      ${bt.by_league ? `<h3 style="margin-top:22px">League by league</h3>
-        <p class="small">How much smaller the model's error is than league averages, for each league and stat (log loss; higher is better, below zero means league averages did better).</p>
+      ${bt.by_league ? `<h3 style="margin-top:22px">Competition by competition</h3>
+        <p class="small">How much smaller the model's error is than the plain average, for each competition and stat (log loss; higher is better, below zero means the average did better). For European competitions the comparison is the European average.</p>
         <div class="tscroll"><table class="heat"><thead><tr><th>League</th><th class="n">Matches</th><th class="n">Win/draw/loss</th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>
         ${Object.entries(bt.by_league).map(([k, v]) => `<tr><td>${h(LEAGUES[k] || k)}</td><td class="n">${v.matches}</td><td class="n ${heat((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100)}">${sgn((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100, 1)}%</td>${Object.keys(STAT).map(st => `<td class="n ${heat(v.gain_pct[st])}">${sgn(v.gain_pct[st], 1)}%</td>`).join("")}</tr>`).join("")}
         </tbody></table></div>` : ""}
@@ -550,10 +558,12 @@ function renderAbout() {
   <li><b>Form, team gap and head-to-head (40%).</b> Form looks only at the last 5 games. Team gap turns the difference in points per game into more or fewer goals, corners, shots and cards, using effects measured on past seasons. Head-to-head uses up to 6 past meetings. Each view leans back toward the statistics when it has little evidence.</li>
   <li><b>Adjustments</b>, each listed on the card with its effect: derby matches (more cards, measured on past seasons), missing players (provisional: a team's expected goals drop by 40% of the player's share of its goals and assists, and a missing regular keeper or defender adds 3% to the opponent), and short rest (provisional). Referee history is shown for context only.</li>
   <li><b>Probabilities.</b> Goals use a Dixon-Coles model to get win/draw/loss, likely scores and over/under chances. Corners, cards and shots use a negative binomial distribution, which allows for more spread than a simple average suggests.</li></ol>
+  <h2>European competitions</h2>
+  <p>Champions, Europa and Conference League matches use the same 60/40 split, with a different base. Clubs come from different leagues, so their season numbers can't be compared directly. Instead, one rating model is fitted on every game available: all seven leagues above, the league and qualifying games of every club playing in Europe (from ESPN), and the European matches themselves. Each club's rating leans toward its league's level, and European results decide how strong each league is. Older games count less. The 40% adds form over the last 5 games in any competition, the strength gap between the teams (effects measured on past European games), and past meetings.</p>
   <p>There's no High/Medium/Low confidence label. An earlier version had one, but on two past seasons it didn't predict which estimates turned out more accurate, so it was removed. Each estimate instead shows the plain facts: how many games it rests on, whether team news is included, and how far away kick-off is. The uncertainty itself is already in the percentages and likely ranges.</p>
   <h2>What it can't do</h2>
   <ul><li>Team news is only as good as FotMob's reports, and doubtful players aren't counted.</li>
-  <li>Champions League, Europa League and Conference League estimates are left out: teams from different leagues can't be compared reliably yet, and many clubs in them play in leagues this site doesn't cover.</li>
+  <li>European estimates are less certain for clubs from small leagues: their ratings rest on fewer games, and the strength of their league is judged mostly from European results.</li>
   <li>Suspensions worked out from cards use La Liga's rule (a ban every 5th yellow) for every league except the Premier League, so they're approximate. FotMob's team news replaces them in the last 4 days.</li>
   <li>Corners and cards are hard to predict for anyone. The model beats league averages on them, but only slightly.</li>
   <li>Analyst views (new manager, motivation) are kept in a separate box and never mixed into the numbers.</li></ul>
@@ -577,13 +587,13 @@ function compactRows(list) {
   return Object.entries(groups).map(([k, us]) => `<div class="day">${h(k)}</div><ul class="sresults big">${us.map(u => {
     const p = u.prediction;
     const right = p ? `<span class="sr-p">${strip(u.home, u.away, p, false)}<span class="tri3"><b>${pct(p.home_win)}</b><b>${pct(p.draw)}</b><b>${pct(p.away_win)}</b></span></span>`
-      : `<span class="sub small">${EUROPE.has(u.comp) ? "stats only" : "estimate soon"}</span>`;
+      : `<span class="sub small">estimate soon</span>`;
     return `<li><a class="srow" href="#/match/${h(u.id)}"><span class="r-when">${h(time(u.kickoff))}<br><b class="ltag ${h(u.comp)}">${h(LSHORT[u.comp])}</b></span>
       <span class="sr-t">${disc(u.home, "xs")}${h(u.home.name)}<span class="sub">v</span>${disc(u.away, "xs")}${h(u.away.name)}</span>${right}</a></li>`;
   }).join("")}</ul>`).join("");
 }
 // how big a match is: table positions, nudged by competition (a judgement call, used only to pick featured games)
-const WEIGHT = { "premier-league": 0, "la-liga": 0, "serie-a": 1, "bundesliga": 1, "ligue-1": 3, "eredivisie": 6, "primeira-liga": 6 };
+const WEIGHT = { "champions-league": -4, "premier-league": 0, "la-liga": 0, "serie-a": 1, "bundesliga": 1, "ligue-1": 3, "europa-league": 3, "eredivisie": 6, "primeira-liga": 6, "conference-league": 8 };
 async function renderHome() {
   title("");
   setNav("home");
@@ -594,7 +604,7 @@ async function renderHome() {
   const top = ranked[0], big = ranked.slice(1, 7);
   const used = new Set([top, ...big].filter(Boolean).map(u => u.id));
   const soon = all.filter(u => daysTo(u.kickoff) <= 2 && !used.has(u.id) && !EUROPE.has(u.comp));
-  const euro = all.filter(u => daysTo(u.kickoff) <= 2 && EUROPE.has(u.comp));
+  const euro = all.filter(u => daysTo(u.kickoff) <= 2 && !used.has(u.id) && EUROPE.has(u.comp));
   const goaly = all.filter(u => u.prediction).sort((a, b) => b.prediction.goals - a.prediction.goals).slice(0, 6);
   const bt = acc && acc.backtest && acc.backtest.test ? acc.backtest : null;
   const live = acc && acc.live ? acc.live : null;
@@ -602,7 +612,7 @@ async function renderHome() {
   app.innerHTML = `
     <section class="hero turf home-hero"><div class="wrap">
       <h1>This week, in numbers</h1>
-      <p class="lede">Estimates for every match in ${nLeagues} European leagues over the next month, full stats for the Champions, Europa and Conference League, the inputs behind each number, and how often they've been right.</p>
+      <p class="lede">Estimates for every match over the next month in ${nLeagues} European leagues and the Champions, Europa and Conference League, the inputs behind each number, and how often they've been right.</p>
       <form class="bigsearch" role="search" data-search>
         <label class="sr" for="bq">Search teams and matches</label>
         <input id="bq" type="search" placeholder="Search a team or a match, like Inter Milan" autocomplete="off" spellcheck="false">
@@ -614,7 +624,7 @@ async function renderHome() {
       ${BANNER}
       ${big.length ? `<section><h2>Big matches this week</h2><div class="cards">${big.map(u => fixtureCard(u, true)).join("")}</div></section>` : ""}
       ${soon.length || euro.length ? `<section class="section"><h2>Next 48 hours</h2>${soon.length ? compactRows(soon) : `<p class="empty">No other league matches in the next 48 hours.</p>`}
-        ${euro.length ? `<details class="more"><summary>${euro.length} European ${euro.length === 1 ? "match" : "matches"} (stats only)</summary>${compactRows(euro)}</details>` : ""}</section>` : ""}
+        ${euro.length ? `<details class="more"><summary>${euro.length} European ${euro.length === 1 ? "match" : "matches"}</summary>${compactRows(euro)}</details>` : ""}</section>` : ""}
       <section class="section"><h2>League leaders</h2><div class="leaders">${H.leaders.map(leaderCard).join("")}</div></section>
       <div class="duo section">
         ${goaly.length ? `<section><h2>Most goals expected this week</h2>${goalsBars(goaly)}</section>` : ""}
@@ -657,7 +667,7 @@ function searchRow(x, D) {
   const a = D.T[x.h] || { name: x.h, slug: x.h }, b = D.T[x.a] || { name: x.a, slug: x.a };
   const right = x.s ? `<span class="r-s">${x.s[0]}–${x.s[1]}</span>`
     : x.p ? `<span class="sr-p"><span class="mini">${`<span style="flex:${x.p[0]};background:var(--pitch)"></span><span class="d" style="flex:${x.p[1]}"></span><span style="flex:${x.p[2]};background:#55666b"></span>`}</span><span class="tri3"><b>${pct(x.p[0])}</b><b>${pct(x.p[1])}</b><b>${pct(x.p[2])}</b></span></span>`
-      : `<span class="sub small">${EUROPE.has(x.c) ? "stats only" : "estimate soon"}</span>`;
+      : `<span class="sub small">estimate soon</span>`;
   return `<li><a class="srow" href="#/match/${h(x.id)}"><span class="r-when">${h(day(x.k))}<br><b class="ltag ${h(x.c)}">${h(LSHORT[x.c])}</b></span>
     <span class="sr-t">${disc(a, "xs")}${h(a.name)}<span class="sub">v</span>${disc(b, "xs")}${h(b.name)}</span>${right}</a></li>`;
 }

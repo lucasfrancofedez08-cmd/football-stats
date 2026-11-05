@@ -123,7 +123,7 @@ def absences(team, side, opp_side, missing, squad_contrib):
     """missing: [{name, reason, position}]; squad_contrib: {name: {goals, assists, starts, games}}"""
     out = []
     total = sum(p["goals"] + 0.5 * p["assists"] for p in squad_contrib.values()) or 1.0
-    team_games = max((p.get("games", 0) for p in squad_contrib.values()), default=0) or 1
+    team_games = max((p.get("games") or p.get("apps", 0) for p in squad_contrib.values()), default=0) or 1
     for p in missing:
         c = squad_contrib.get(p["name"])
         if not c:

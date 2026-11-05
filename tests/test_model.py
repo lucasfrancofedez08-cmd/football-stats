@@ -56,8 +56,8 @@ def _logloss_1x2(preds):
 
 def test_beats_league_average_on_2025_26():
     """Walk-forward over every 2025-26 match: the model must clearly beat a no-information baseline on 1X2."""
-    from pipeline.sources import PREDICTED
-    for league in PREDICTED:
+    from pipeline.sources import DOMESTIC, PREDICTED
+    for league in [x for x in PREDICTED if x in DOMESTIC]:
         lg = seasons(league)
         pred = Predictor(league, lg[:4])
         season = lg[4]
@@ -163,3 +163,33 @@ def test_every_domestic_league_has_history_and_derbies():
         assert all(len(s) >= 300 for s in ss), lg
         teams = {m["home"] for s in ss for m in s}
         assert names & teams, f"no derby defined for {lg}"
+
+
+def test_europe_ratings_beat_european_average():
+    """Cross-league ratings (the 60% base for European games), walk-forward over 2025-26."""
+    import json as _json
+    from model.europe import EUROPE_CTX, Ratings, assemble
+    H = os.path.join(ROOT, "data", "history")
+    fd = {lg: [m for s in ("2324", "2425", "2526") for m in load_file(os.path.join(H, f"{lg}_{s}.csv"), lg, s)]
+          for lg in ("premier-league", "la-liga", "serie-a", "bundesliga", "ligue-1", "eredivisie", "primeira-liga")}
+    rows, clubs = [], {}
+    for s in ("2425", "2526"):
+        rows += _json.load(open(os.path.join(H, f"europe_{s}.json")))
+        for t, g in _json.load(open(os.path.join(H, f"europe_clubs_{s}.json"))).items():
+            clubs.setdefault(t, []).extend(g)
+    matches, groups, _ = assemble(fd, rows, clubs)
+    test = [m for m in matches if m["ctx"] == EUROPE_CTX and m.get("comp") and "2025-09-01" <= m["date"] < "2026-07-01"]
+    model, base = [], []
+    for d in sorted({m["date"] for m in test}):
+        r = Ratings(half_life=400, tau=0.15).fit(matches, groups, "goals", d)
+        prev = [m for m in matches if m["ctx"] == EUROPE_CTX and m.get("comp") and m["date"] < d][-500:]
+        bh = sum(m["hg"] for m in prev) / len(prev)
+        ba = sum(m["ag"] for m in prev) / len(prev)
+        for m in (x for x in test if x["date"] == d):
+            lh, la = r.expect(m["home"], m["away"])
+            g, b = goal_probabilities(lh, la, -0.12), goal_probabilities(bh, ba, -0.12)
+            k = "home_win" if m["hg"] > m["ag"] else "draw" if m["hg"] == m["ag"] else "away_win"
+            model.append(g[k])
+            base.append(b[k])
+    assert len(model) > 400
+    assert _logloss_1x2(model) < _logloss_1x2(base) - 0.03
