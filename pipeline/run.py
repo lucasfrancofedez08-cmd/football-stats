@@ -11,6 +11,7 @@ import os
 import shutil
 import sys
 import traceback
+import unicodedata
 from datetime import date, datetime, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -88,6 +89,36 @@ def days_to_fetch(league, events, season, today):
         if not e.get("completed") and today - timedelta(days=60) <= d < today:
             days.add(d)
     return sorted(days)
+
+
+def norm(name):
+    s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
+    return " ".join(s.replace("-", " ").split())
+
+
+def injuries_for(overrides, lg, team, squad, match_day, today):
+    """Injured players from data/overrides/injuries.json (news checked within 8 days).
+    Returns (list, known) where known=True if this team's list was checked recently."""
+    entry = (overrides.get("teams", {}).get(lg, {}) or {}).get(team)
+    if entry is None:
+        return [], False
+    checked = entry.get("checked")
+    if not checked or (today - date.fromisoformat(checked)).days > 8:
+        return [], False
+    by_norm = {norm(n): p for n, p in squad.items()}
+    out = []
+    for x in entry.get("out", []):
+        until = x.get("until")
+        if until and until < match_day:
+            continue
+        p = by_norm.get(norm(x["name"]))
+        if p is None:  # try surname match
+            last = norm(x["name"]).split()[-1:]
+            cands = [q for k, q in by_norm.items() if last and k.split()[-1:] == last]
+            p = cands[0] if len(cands) == 1 else None
+        out.append({"name": p["name"] if p else x["name"], "position": (p or {}).get("pos"),
+                    "reason": f"{x.get('reason') or 'injured'} (news checked {checked})", "source": x.get("source")})
+    return out, True
 
 
 def main():
@@ -192,6 +223,7 @@ def main():
     # ------------------------------------------------------------ 7. predictions (freeze at kick-off)
     version = model_version()
     pdir = os.path.join(DATA, "predictions", season)
+    overrides = jload(os.path.join(DATA, "overrides", "injuries.json"), {})
     made = frozen = 0
     for lg in DOMESTIC:
         prev = history_seasons(lg, season)
@@ -212,17 +244,23 @@ def main():
             cur = [m for m in matches[lg] if m["date"] < e["kickoff"][:10]]
             ctx = {"referee": referees.get((e["kickoff"][:10], home, away))
                    or referees.get(((ko - timedelta(days=1)).date().isoformat(), home, away))}
+            known = True
             for side, team in (("home", home), ("away", away)):
                 ctx[f"{side}_label"] = (team_map[lg].get(team) or {}).get("name") or team
                 sq = squad[lg].get(team, {})
                 ctx[f"{side}_squad"] = sq
-                ctx[f"{side}_missing"] = players.likely_suspended(lg, team, sq, cur) if sq else None
+                susp = players.likely_suspended(lg, team, sq, cur) if sq else []
+                inj, ok = injuries_for(overrides, lg, team, sq, e["kickoff"][:10], today)
+                known = known and ok
+                names = {norm(x["name"]) for x in susp}
+                ctx[f"{side}_missing"] = susp + [x for x in inj if norm(x["name"]) not in names]
                 if ko - now < timedelta(days=3):
                     last = sources.espn_team_last_match(e[side]["espn_id"], e["kickoff"])
                     if last:
                         lko = datetime.fromisoformat(last[0].replace("Z", "+00:00"))
                         ctx[f"{side}_rest_days"] = (ko.date() - lko.date()).days
                         ctx[f"{side}_europe_midweek"] = "UEFA" in last[1] and (ko - lko).days <= 5
+            ctx["injuries_known"] = known
             try:
                 p = predictions.make(predictor, e, home, away, cur, ctx, now.isoformat(), version)
                 jsave(path, p)

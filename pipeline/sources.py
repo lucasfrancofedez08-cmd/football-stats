@@ -78,7 +78,7 @@ def _team(c):
     t = c.get("team", {})
     logo = t.get("logo") or (t.get("logos") or [{}])[0].get("href")
     return {"espn_id": t.get("id"), "name": t.get("displayName"), "short": t.get("shortDisplayName") or t.get("displayName"),
-            "abbr": t.get("abbreviation"), "logo": logo}
+            "abbr": t.get("abbreviation"), "logo": logo, "color": t.get("color"), "alt_color": t.get("alternateColor")}
 
 
 def parse_event(e):

@@ -152,7 +152,7 @@ class Predictor:
 
 def confidence(min_games, mult, ctx):
     moved = max(abs(m - 1) for pair in mult.values() for m in pair)
-    missing_data = ctx.get("home_missing") is None or ctx.get("away_missing") is None
+    missing_data = not ctx.get("injuries_known")
     if min_games < 4 or moved > 0.2:
         level = "Low"
     elif min_games >= 10 and moved < 0.1 and not missing_data:
@@ -165,5 +165,5 @@ def confidence(min_games, mult, ctx):
     if moved >= 0.1:
         reasons.append(f"adjustments moved a number by {moved:.0%}")
     if missing_data:
-        reasons.append("injury/suspension list incomplete")
+        reasons.append("no recent injury news checked for one side")
     return {"level": level, "reasons": reasons}

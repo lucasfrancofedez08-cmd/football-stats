@@ -38,7 +38,7 @@ def make(predictor, fixture, home, away, cur, ctx, made_at, model_version):
         "id": fixture["espn_id"], "league": predictor.league, "kickoff": fixture["kickoff"],
         "home": home, "away": away, "made_at": made_at, "model_version": model_version,
         "prediction": p, "baseline": baseline(predictor, cur),
-        "suspended": {"home": ctx.get("home_missing") or [], "away": ctx.get("away_missing") or []},
+        "missing": {"home": ctx.get("home_missing") or [], "away": ctx.get("away_missing") or []},
     })
 
 

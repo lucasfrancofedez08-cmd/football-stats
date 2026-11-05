@@ -1,1 +1,33 @@
-# football-stats
+# Matchday Numbers
+
+Past match statistics and statistical estimates for upcoming La Liga and Premier League matches, plus full Champions League stats. An information tool, not betting advice: every estimate shows its inputs, its uncertainty and its track record.
+
+**Website:** https://lucasfrancofedez08-cmd.github.io/football-stats/
+
+## How it runs
+
+A GitHub Actions workflow (`.github/workflows/update.yml`) runs every 3 hours:
+
+1. Downloads results and match stats from **football-data.co.uk** and fixtures, lineups, goals and Champions League matches from **ESPN's public feed**.
+2. Cross-checks the two sources stat by stat. A stat the sources disagree on is shown with both values and left out of the model for that match.
+3. Makes predictions for league matches in the next 10 days. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
+4. Writes the site data (`site/data/`) and publishes `site/` to GitHub Pages.
+
+Injury news is checked twice a week by a scheduled Claude task, which writes `data/overrides/injuries.json` (the manual override). Suspensions are worked out from cards.
+
+## Model
+
+`model/` — league venue averages × team attack × opponent defence, recency-weighted (last 6 games count double) and shrunk toward last season (or a promoted-team prior). Goals borrow half their strength from shots on target. Dixon-Coles for goals; negative binomial for corners, cards and shots. Adjustments are kept separate and listed on every card.
+
+`backtest/run.py` tunes on 2023-24 and 2024-25 and tests once on 2025-26 (760 matches, walk-forward). Results in `backtest/results.json`; tuned parameters in `model/tuned.json`. On the test season the model beats league averages on every stat; the margin is large for win/draw/loss and shots, small for corners and cards. Momentum and referee history did not improve accuracy, so they are shown for context only.
+
+## Layout
+
+```
+model/       prediction model (no network)
+pipeline/    sources, merge & cross-check, players, predictions, site data
+backtest/    tuning and test on past seasons
+data/        history CSVs, state, frozen predictions, overrides
+site/        static website (index.html, app.js, styles.css, data/)
+tests/       python -m pytest -q
+```

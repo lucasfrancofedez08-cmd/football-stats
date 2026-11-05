@@ -46,7 +46,8 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
         if slug in used and used[slug] != espn_id:
             slug = f"{slug}-{espn_id or 'x'}"
         used[slug] = espn_id
-        i = {"slug": slug, "name": name, "short": t.get("short") or name, "logo": t.get("logo"), "espn_id": espn_id}
+        i = {"slug": slug, "name": name, "short": t.get("short") or name, "logo": t.get("logo"), "espn_id": espn_id,
+             "color": t.get("color"), "alt_color": t.get("alt_color"), "abbr": t.get("abbr")}
         if espn_id:
             by_espn[espn_id] = i
         return i
@@ -70,7 +71,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
 
     def tid(lg, key):
         i = ident.get((lg, key)) or make_ident(None, str(key))
-        return {"slug": i["slug"], "name": i["name"], "short": i["short"], "logo": i["logo"]}
+        return {k: i.get(k) for k in ("slug", "name", "short", "logo", "color", "alt_color", "abbr")}
 
     # ---------------------------------------------------------------- per-team rows
     rows = {}  # slug -> list of team-perspective match rows

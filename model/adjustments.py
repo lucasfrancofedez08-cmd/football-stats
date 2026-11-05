@@ -45,7 +45,7 @@ def momentum(cur, team, side, coef):
     detail = f"{ppg5:.1f} pts/game in last 5 vs {ppg_all:.1f} season average"
     if coef == 0:
         return [Adjustment("momentum", "goals", side, 1.0,
-                           detail + " — shown for context, not applied (adds no accuracy in backtests)", "info")]
+                           detail, "info")]
     return [Adjustment("momentum", "goals", side, 1 + eff, detail, "measured")]
 
 
@@ -62,7 +62,7 @@ def referee(ref_name, ref_matches, league_cards_per_match, k=10.0):
     detail = f"{ref_name}: {total / n:.1f} cards per game in {n} games (league {mu:.1f})"
     if k >= 1e8:
         return [Adjustment("referee", "cards", "both", 1.0,
-                           detail + " — shown for context, not applied (adds no accuracy in backtests)", "info")]
+                           detail, "info")]
     factor = (total + k * mu) / ((n + k) * mu)
     return [Adjustment("referee", "cards", "both", factor, detail, "measured")]
 
