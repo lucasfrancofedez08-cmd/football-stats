@@ -40,11 +40,11 @@ def routes():
 
 
 def test_every_page_renders(server):
-    launch = {}
-    if os.path.exists("/usr/bin/google-chrome"):
-        launch["executable_path"] = "/usr/bin/google-chrome"
     with pw.sync_playwright() as p:
-        browser = p.chromium.launch(**launch)
+        try:
+            browser = p.chromium.launch(timeout=60000)  # Playwright's own Chromium
+        except Exception:
+            browser = p.chromium.launch(executable_path="/usr/bin/google-chrome", timeout=60000)
         page = browser.new_page()
         errors = []
         page.on("pageerror", lambda e: errors.append(str(e)))

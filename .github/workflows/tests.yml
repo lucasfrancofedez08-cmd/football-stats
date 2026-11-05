@@ -16,5 +16,5 @@ jobs:
           cache: pip
       - run: pip install -r requirements.txt
       - run: pip install pytest playwright
-      # uses the Google Chrome already installed on GitHub's runners (no browser download)
+      - run: python -m playwright install chromium   # browser only; system libraries are already on the runner
       - run: python -m pytest -q
