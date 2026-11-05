@@ -87,6 +87,20 @@ DERBIES = [
     ("Real Madrid", "Barcelona"), ("Real Madrid", "Ath Madrid"), ("Barcelona", "Espanol"),
     ("Sevilla", "Betis"), ("Ath Bilbao", "Sociedad"), ("Valencia", "Levante"),
     ("Getafe", "Leganes"), ("Ath Madrid", "Barcelona"), ("Real Madrid", "Getafe"),
+    # Serie A
+    ("Inter", "Milan"), ("Roma", "Lazio"), ("Juventus", "Torino"), ("Juventus", "Inter"), ("Genoa", "Sampdoria"),
+    ("Juventus", "Milan"), ("Napoli", "Roma"), ("Fiorentina", "Juventus"),
+    # Bundesliga
+    ("Dortmund", "Schalke 04"), ("Bayern Munich", "Dortmund"), ("Hamburg", "Werder Bremen"), ("FC Koln", "M'gladbach"),
+    ("Union Berlin", "Hertha"), ("Hamburg", "St Pauli"), ("Stuttgart", "Karlsruhe"),
+    # Ligue 1
+    ("Paris SG", "Marseille"), ("Lyon", "St Etienne"), ("Lens", "Lille"), ("Nice", "Monaco"), ("Marseille", "Lyon"),
+    ("Paris SG", "Paris FC"), ("Rennes", "Nantes"),
+    # Eredivisie
+    ("Ajax", "Feyenoord"), ("Ajax", "PSV Eindhoven"), ("Feyenoord", "PSV Eindhoven"), ("Feyenoord", "Sparta Rotterdam"),
+    ("Feyenoord", "Excelsior"), ("Groningen", "Heerenveen"), ("Twente", "Heracles"),
+    # Primeira Liga
+    ("Benfica", "Sp Lisbon"), ("Benfica", "Porto"), ("Porto", "Sp Lisbon"), ("Sp Braga", "Guimaraes"), ("Porto", "Boavista"),
 ]
 _DERBY_SET = {frozenset(p) for p in DERBIES}
 

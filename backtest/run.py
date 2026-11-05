@@ -27,7 +27,7 @@ from model.views import season_ppg, team_ppg  # noqa: E402
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data", "history")
 SEASONS = ["2122", "2223", "2324", "2425", "2526"]
-LEAGUES = ["premier-league", "la-liga"]
+from pipeline.sources import DOMESTIC as LEAGUES  # noqa: E402
 TUNE = ["2324", "2425"]
 TEST = ["2526"]
 EPS = 1e-12
@@ -297,6 +297,31 @@ def calibration(params, tuning, seasons):
     return bins
 
 
+def per_league(params, tuning, pure):
+    """Test-season results league by league, against league averages and statistics alone."""
+    out = {}
+    for lg in LEAGUES:
+        r = {"matches": 0, "stats": {}}
+        for stat in STATS:
+            pairs = list(walk(lg, TEST[0], params, tuning))
+            m = score_stat(stat, pairs, params)
+            b = score_stat(stat, list(walk(lg, TEST[0], params, baseline=True, stats=[stat])), params)
+            pu = score_stat(stat, list(walk(lg, TEST[0], pure, tuning)), pure)
+            r["matches"] = max(r["matches"], m["n"])
+            r["stats"][stat] = {"objective": m["objective"], "baseline_objective": b["objective"],
+                                "pure_objective": pu["objective"], "mae": m["mae"], "baseline_mae": b["mae"]}
+            if stat == "goals":
+                r["brier_1x2"], r["baseline_brier_1x2"] = m["brier"], b["brier"]
+                r["ll_1x2"], r["baseline_ll_1x2"] = m["ll"], b["ll"]
+        out[lg] = r
+        wins = sum(v["objective"] < v["baseline_objective"] for v in r["stats"].values())
+        print(f"  {lg:15s} n={r['matches']:3d} 1X2 brier {r['brier_1x2']:.4f} vs {r['baseline_brier_1x2']:.4f}"
+              f" ({(1 - r['brier_1x2'] / r['baseline_brier_1x2']) * 100:+.1f}%)  beats baseline on {wins}/5 stats  "
+              + " ".join(f"{s[:4]} {(1 - v['objective'] / v['baseline_objective']) * 100:+.1f}%" for s, v in r["stats"].items()),
+              flush=True)
+    return out
+
+
 def main():
     print("Tuning base model on", TUNE, flush=True)
     best = tune()
@@ -352,6 +377,9 @@ def main():
                   f"  (actual over rate {d['actual_over_rate']:.1%})", flush=True)
         if stat == "goals":
             print(f"      1X2 brier {model['brier']:.4f} vs {base['brier']:.4f}  logloss {model['ll']:.4f} vs {base['ll']:.4f}", flush=True)
+    print("Per league (2025-26):", flush=True)
+    results["by_league"] = per_league(params, tuning, pure)
+    results["matches"] = sum(v["matches"] for v in results["by_league"].values())
     results["calibration"] = calibration(params, tuning, TEST)
     print("  calibration (predicted -> actual):", flush=True)
     for b in results["calibration"]:
