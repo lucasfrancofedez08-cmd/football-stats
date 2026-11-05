@@ -5,7 +5,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["pipeline/**", "model/**", "site/**", ".github/workflows/update.yml"]
+    paths: ["pipeline/**", "model/**", "site/*.*", "data/overrides/**", ".github/workflows/update.yml"]
 concurrency:
   group: update
   cancel-in-progress: false
