@@ -17,9 +17,13 @@ Team news (injured and suspended players) comes from **FotMob's public feed** fo
 
 ## Model
 
-`model/` — league venue averages × team attack × opponent defence, recency-weighted (last 6 games count double) and shrunk toward last season (or a promoted-team prior). Goals borrow half their strength from shots on target. Dixon-Coles for goals; negative binomial for corners, cards and shots. Adjustments are kept separate and listed on every card.
+`model/` — expected numbers are 60% statistical base and 40% "form & matchup" views (the owner's chosen split).
 
-`backtest/run.py` tunes on 2023-24 and 2024-25 and tests once on 2025-26 (760 matches, walk-forward). Results in `backtest/results.json`; tuned parameters in `model/tuned.json`. On the test season the model beats league averages on every stat; the margin is large for win/draw/loss and shots, small for corners and cards. Momentum and referee history did not improve accuracy, so they are shown for context only.
+- Base (60%): league venue averages × team attack × opponent defence, recency-weighted (last 6 games count double) and shrunk toward last season (or a promoted-team prior). Goals borrow half their strength from shots on target.
+- Views (40%, `model/views.py`): form over the last 5 games (16%), team gap in points per game mapped to each stat with effects measured on 2022-25 (14%), and up to 6 head-to-head meetings (10%). Each view shrinks toward the base when its sample is small.
+- Then separate, listed adjustments (derby cards, missing players, short rest), and Dixon-Coles for goals / negative binomial for corners, cards and shots.
+
+`backtest/run.py` tunes on 2023-24 and 2024-25 and tests once on 2025-26 (760 matches, walk-forward). Results in `backtest/results.json`; tuned parameters in `model/tuned.json`. On the test season the model beats league averages on every stat; the margin is large for win/draw/loss and shots, small for corners and cards. The 60/40 mix scores almost the same as the base alone (slightly better on four stats, slightly worse on cards). Referee history did not improve accuracy, so it is shown for context only.
 
 ## Layout
 

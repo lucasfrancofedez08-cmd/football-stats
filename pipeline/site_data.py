@@ -145,6 +145,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
         for i, r in enumerate(out, 1):
             r["pos"] = i
             r["gd"] = r["gf"] - r["ga"]
+            r["form"] = "".join(x["result"] for x in rows.get(r["team"]["slug"], []) if x["comp"] == lg)[-5:]
         return out
 
     # ---------------------------------------------------------------- predictions on disk
@@ -159,6 +160,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
             return None
         s = p["prediction"]["stats"]
         return {"home_win": s["goals"]["home_win"], "draw": s["goals"]["draw"], "away_win": s["goals"]["away_win"],
+                "home_goals": s["goals"]["home"], "away_goals": s["goals"]["away"],
                 "goals": s["goals"]["total"], "corners": s["corners"]["total"], "cards": s["cards"]["total"],
                 "confidence": p["prediction"]["confidence"]["level"], "made_at": p["made_at"]}
 
@@ -236,9 +238,11 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
                     "share_goals": p["goals"] / team_goals, "share_involvement": (p["goals"] + p["assists"]) / team_goals}
                    for p in scorers if p["goals"] + p["assists"] > 0][:12]
         ups = [u for u in upcoming_all if slug in (u["home"]["slug"], u["away"]["slug"])][:6]
-        teams_index.append({"slug": slug, "name": i["name"], "logo": i["logo"], "league": dom or "champions-league"})
+        teams_index.append({"slug": slug, "name": i["name"], "logo": i["logo"], "league": dom or "champions-league",
+                            "color": i.get("color")})
         dump(os.path.join(out, "team", f"{slug}.json"), {
-            "slug": slug, "name": i["name"], "logo": i["logo"], "league": dom or "champions-league", "season": season,
+            "slug": slug, "name": i["name"], "logo": i["logo"], "color": i.get("color"), "alt_color": i.get("alt_color"),
+            "league": dom or "champions-league", "season": season,
             "averages": avg, "record": rec, "form": {"last5": form(lrows, 5), "last10": form(lrows, 10)},
             "log": rs, "scorers": scorers, "upcoming": ups,
             "europe": [r for r in rs if r["comp"] == "champions-league"] if dom else [],
@@ -254,6 +258,10 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
         bt = {"season": "2025-26", "leagues": ["Premier League", "La Liga"], "matches": 760,
               "test": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in b["test"].items()},
               "baseline": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in b["baseline"].items()},
+              # log loss x1000 so small differences survive rounding
+              "objective_x1000": {k: v["objective"] * 1000 for k, v in b["test"].items()},
+              "baseline_objective_x1000": {k: v["objective"] * 1000 for k, v in b["baseline"].items()},
+              "pure_objective_x1000": {k: v["objective"] * 1000 for k, v in b.get("pure_stats", {}).items()},
               "calibration": b["calibration"], "tuning": b["tuning"], "adjustment_tests": b["adjustment_tests"]}
     recent = []
     for p in sorted(scored, key=lambda p: p["kickoff"], reverse=True)[:60]:

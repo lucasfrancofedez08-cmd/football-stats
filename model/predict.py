@@ -4,6 +4,7 @@ from __future__ import annotations
 from . import adjustments as adj
 from .core import (STATS, Params, count_probabilities, goal_probabilities, league_means,
                    promoted_prior, season_ratios, strength, team_prior, team_records)
+from .views import Views
 
 STAT_LABEL = {"goals": "goals", "corners": "corners", "cards": "cards",
               "shots": "shots", "shots_on_target": "shots on target"}
@@ -41,6 +42,13 @@ class Predictor:
         self.prev_ratios = {s: season_ratios(self.prev, s, self.params) for s in STATS} if self.prev else {s: {} for s in STATS}
         self.promoted = {s: promoted_prior(prev_seasons, s, self.params) for s in STATS}
         self.ref_history = [m for season in prev_seasons[-2:] for m in season if m.get("referee")]
+        nomix = Params(league_prior_matches=0)
+        season_means = {}
+        for season in prev_seasons:
+            if season:
+                season_means[season[0]["season"]] = {st: league_means(season, None, st, nomix) for st in STATS}
+        self.views = Views(prev_seasons, season_means, self.tuning.get("gap_coef"),
+                           self.tuning.get("form_k"), self.tuning.get("h2h_k"))
 
     # -------------------------------------------------------------- step 1
     def base(self, cur, home, away):
@@ -74,9 +82,6 @@ class Predictor:
     # -------------------------------------------------------------- step 2
     def adjustments(self, cur, home, away, ctx):
         out = []
-        coef = self.tuning["momentum_coef"]
-        out += adj.momentum(cur, home, "home", coef)
-        out += adj.momentum(cur, away, "away", coef)
         mh, ma = league_means(cur, self.prev, "cards", self.params)
         ref = ctx.get("referee")
         ref_games = [m for m in self.ref_history + [m for m in cur if m.get("referee")]
@@ -96,8 +101,14 @@ class Predictor:
         """cur: this season's league matches played BEFORE kick-off."""
         ctx = ctx or {}
         base, info = self.base(cur, home, away)
+        w = self.params.blend_weight
+        blended, views, vmeta, vsum = base, None, None, None
+        if w > 0:
+            cur_means = {st: (info[st]["league_home"], info[st]["league_away"]) for st in STATS}
+            combined, views, vmeta, vsum = self.views.compute(cur, home, away, base, info, cur_means)
+            blended = {st: [(1 - w) * base[st][j] + w * combined[st][j] for j in (0, 1)] for st in STATS}
         adjs = self.adjustments(cur, home, away, ctx)
-        final, mult = adj.apply(base, adjs)
+        final, mult = adj.apply(blended, adjs)
         stats = {}
         for stat, (lh, la) in final.items():
             if stat == "goals":
@@ -106,6 +117,10 @@ class Predictor:
                 probs = count_probabilities(stat, lh, la, self.params.nb_alpha[stat])
             stats[stat] = {"home": lh, "away": la, "total": lh + la,
                            "base_home": base[stat][0], "base_away": base[stat][1], **probs}
+            if views is not None:
+                stats[stat]["blend_home"], stats[stat]["blend_away"] = blended[stat]
+                stats[stat]["views"] = views[stat]
+                stats[stat]["view_meta"] = vmeta[stat]
             if not fast:
                 stats[stat]["why"] = self.why(stat, ctx.get("home_label", home), ctx.get("away_label", away), info[stat])
         out = {"home": home, "away": away, "league": self.league, "stats": stats}
@@ -116,6 +131,7 @@ class Predictor:
         out["sample"] = {"home_games": info["goals"]["home_n"], "away_games": info["goals"]["away_n"],
                          "home_prior": info["goals"]["home_prior"], "away_prior": info["goals"]["away_prior"]}
         out["confidence"] = confidence(min_n, mult, ctx)
+        out["blend"] = {"base_weight": 1 - w, "views_weight": w, **(vsum or {})}
         out["analyst_view"] = ctx.get("analyst_view", [])
         return out
 

@@ -59,6 +59,7 @@ class Params:
         "goals": 0.7, "corners": 0.7, "cards": 0.7, "shots": 0.7, "shots_on_target": 0.7})
     venue_blend: float = 0.0
     goals_sot_mix: float = 0.0   # share of goals attack/defence taken from shots-on-target strength
+    blend_weight: float = 0.0    # share given to form, team gap and head-to-head; tuned.json sets the user's 0.4
     league_prior_matches: float = 80.0
     dc_rho: float = -0.06
     # NB over-dispersion for match totals: var = m + alpha * m^2 (0 = Poisson)

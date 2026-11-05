@@ -7,6 +7,7 @@ league-average baseline that knows nothing about the teams.
 """
 from __future__ import annotations
 
+import copy
 import itertools
 import json
 import math
@@ -21,6 +22,7 @@ from model.core import (STATS, Params, count_probabilities, goal_probabilities, 
 from model.data import load_file  # noqa: E402
 from model.predict import Predictor  # noqa: E402
 from model import adjustments as adj  # noqa: E402
+from model.views import season_ppg, team_ppg  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RAW = os.path.join(ROOT, "data", "history")
@@ -213,6 +215,41 @@ def measure_derby(params, seasons):
     return (act / exp if exp else 1.0), n
 
 
+def fit_gap(train):
+    """Team-gap effect: log(stat / league venue average) against the pre-match points-per-game gap."""
+    num = {s: [0.0, 0.0] for s in STATS}
+    den = {s: [0.0, 0.0] for s in STATS}
+    nomix = Params(league_prior_matches=0)
+    for lg in LEAGUES:
+        seasons = data()[lg]
+        for sname in train:
+            i = SEASONS.index(sname)
+            prev = season_ppg(seasons[i - 1])
+            means = {s: league_means(seasons[i], None, s, nomix) for s in STATS}
+            cur = []
+            for m in seasons[i]:
+                g = team_ppg(cur, m["home"], prev)[0] - team_ppg(cur, m["away"], prev)[0]
+                for s, (hk, ak) in STATS.items():
+                    if has_stat(m, s):
+                        for j, (x, mu) in enumerate(((m[hk], means[s][0]), (m[ak], means[s][1]))):
+                            num[s][j] += g * math.log((x + 0.5) / (mu + 0.5))
+                            den[s][j] += g * g
+                cur.append(m)
+    return {s: [round(num[s][j] / den[s][j], 4) for j in (0, 1)] for s in STATS}
+
+
+def tune_views(params, tuning):
+    best = None
+    for fk, hk in itertools.product([2.0, 5.0, 10.0], [3.0, 6.0, 12.0]):
+        t = {**tuning, "form_k": fk, "h2h_k": hk}
+        pairs = [x for lg in LEAGUES for s in TUNE for x in walk(lg, s, params, t)]
+        obj = sum(score_stat(st, pairs, params)["objective"] for st in STATS)
+        print(f"  views form_k={fk} h2h_k={hk}: {obj:.4f}", flush=True)
+        if best is None or obj < best[0]:
+            best = (obj, fk, hk)
+    return best[1], best[2]
+
+
 def adjustment_tests(params, seasons):
     """Effect of each adjustment on the tuning seasons (lower log loss = better)."""
     out = {}
@@ -220,9 +257,6 @@ def adjustment_tests(params, seasons):
     def run(stat, tuning):
         pairs = [x for lg in LEAGUES for s in seasons for x in walk(lg, s, params, tuning)]
         return score_stat(stat, pairs, params)["objective"]
-    out["goals_no_momentum"] = run("goals", base_tuning)
-    for c in [0.03, 0.06, 0.1]:
-        out[f"goals_momentum_{c}"] = run("goals", {**base_tuning, "momentum_coef": c})
     # referee: Premier League only (La Liga files have no referee)
     def run_pl(tuning):
         pairs = [x for s in seasons for x in walk("premier-league", s, params, tuning)]
@@ -283,16 +317,24 @@ def main():
     for k, v in tests.items():
         print(f"  {k:28s} {v:.4f}", flush=True)
     derby, derby_n = measure_derby(params, ["2122", "2223"] + TUNE)
-    mom = min([0.03, 0.06, 0.1], key=lambda c: tests[f"goals_momentum_{c}"])
-    momentum_coef = mom if tests[f"goals_momentum_{mom}"] < tests["goals_no_momentum"] - 0.001 else 0.0
+    momentum_coef = 0.0  # momentum now enters through the form view of the 40% blend
     refk = min([5.0, 10.0, 20.0, 40.0], key=lambda k: tests[f"pl_cards_referee_k{int(k)}"])
     referee_k = refk if tests[f"pl_cards_referee_k{int(refk)}"] < tests["pl_cards_no_referee"] - 0.001 else 1e9
     tuning = {"momentum_coef": momentum_coef, "derby_cards": round(derby, 3), "referee_k": referee_k}
     print("  chosen tuning", tuning, f"(derby sample {derby_n})", flush=True)
 
+    # 60/40 split chosen by the user: 60% statistical base, 40% form / team gap / head-to-head
+    print("Fitting the 40% views (team gap measured on 2022-25)", flush=True)
+    tuning["gap_coef"] = fit_gap(["2223", "2324", "2425"])
+    params.blend_weight = 0.4
+    tuning["form_k"], tuning["h2h_k"] = tune_views(params, tuning)
+    print("  views", {k: tuning[k] for k in ("gap_coef", "form_k", "h2h_k")}, flush=True)
+
     print("Final test on", TEST, flush=True)
     results = {"params": params.__dict__, "tuning": tuning, "adjustment_tests": tests,
-               "derby_sample": derby_n, "test": {}, "baseline": {}}
+               "derby_sample": derby_n, "test": {}, "baseline": {}, "pure_stats": {}}
+    pure = copy.deepcopy(params)
+    pure.blend_weight = 0.0
     for stat in STATS:
         pairs = [x for lg in LEAGUES for s in TEST for x in walk(lg, s, params, tuning)]
         model = score_stat(stat, pairs, params)
@@ -300,6 +342,8 @@ def main():
         base = score_stat(stat, base_pairs, params)
         results["test"][stat] = model
         results["baseline"][stat] = base
+        pure_pairs = [x for lg in LEAGUES for s in TEST for x in walk(lg, s, pure, tuning)]
+        results["pure_stats"][stat] = score_stat(stat, pure_pairs, pure)
         print(f"  {stat:16s} model obj {model['objective']:.4f} vs baseline {base['objective']:.4f} | "
               f"MAE {model['mae']:.2f} vs {base['mae']:.2f}", flush=True)
         for line, d in model["lines"].items():
