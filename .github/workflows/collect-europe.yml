@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
       - run: python tools/collect_europe.py ${{ github.event.inputs.args }}
       - name: Save
         run: |

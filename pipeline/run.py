@@ -18,7 +18,13 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from model.data import load_file  # noqa: E402
 from model.predict import Predictor  # noqa: E402
-from pipeline import europe, merge, players, predictions, site_data, sources, teams  # noqa: E402
+from pipeline import merge, players, predictions, site_data, sources, teams  # noqa: E402
+
+try:  # the European model needs numpy/scipy; league estimates must publish even without it
+    from pipeline import europe  # noqa: E402
+except Exception as _ex:  # pragma: no cover
+    europe = None
+    _EUROPE_IMPORT_ERROR = repr(_ex)
 from pipeline.sources import DOMESTIC, EUROPE, LEAGUES, PREDICTED  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -79,7 +85,7 @@ def roll_history(season, sdir):
             shutil.copy(src, dst)
     pdir = os.path.join(DATA, "state", prev)
     dst = os.path.join(HISTORY, f"europe_{prev}.json")
-    if not os.path.exists(dst) and os.path.exists(os.path.join(pdir, "espn_events_champions-league.json")):
+    if europe is not None and not os.path.exists(dst) and os.path.exists(os.path.join(pdir, "espn_events_champions-league.json")):
         rows = []
         for lg in EUROPE:
             ev = jload(os.path.join(pdir, f"espn_events_{lg}.json"), {})
@@ -369,7 +375,9 @@ def main():
     # ------------------------------------------------------------ 7b. European competitions (cross-league model)
     eu_pred = [lg for lg in EUROPE if lg in PREDICTED]
     ep = None
-    if eu_pred:
+    if eu_pred and europe is None:
+        log["errors"].append(f"european model unavailable: {_EUROPE_IMPORT_ERROR}")
+    elif eu_pred:
         try:
             ep, _ = europe.build(season, now, fd, matches, events, team_map, sdir, log, jload, jsave)
         except Exception as ex:  # the league estimates must still publish
