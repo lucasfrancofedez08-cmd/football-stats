@@ -127,3 +127,20 @@ def test_score_marks_hits():
     r = score(p, m)
     assert r["goals"]["actual"] == [m["hg"], m["ag"]]
     assert set(r["corners"]["lines"]) == {"8.5", "9.5", "10.5", "11.5"}
+
+
+def test_team_news_matching_and_doubtful():
+    from datetime import date
+    from pipeline.run import find_player, team_news
+    squad = {"Ferdi Kadıoğlu": {"name": "Ferdi Kadıoğlu", "pos": "D"}, "Kaoru Mitoma": {"name": "Kaoru Mitoma", "pos": "M"},
+             "Vinícius Júnior": {"name": "Vinícius Júnior", "pos": "F"}}
+    assert find_player("Ferdi Kadioglu", squad)["name"] == "Ferdi Kadıoğlu"
+    assert find_player("Vinicius Junior", squad)["name"] == "Vinícius Júnior"
+    fm = [{"name": "Kaoru Mitoma", "type": "injury", "expected_return": "Late November 2026"},
+          {"name": "Ferdi Kadıoğlu", "type": "injury", "expected_return": "Back in training"},
+          {"name": "Someone Else", "type": "suspension", "expected_return": None}]
+    out, doubtful, known = team_news(fm, squad, None, date(2026, 11, 5))
+    assert known and [x["name"] for x in out] == ["Kaoru Mitoma", "Someone Else"]
+    assert [x["name"] for x in doubtful] == ["Ferdi Kadıoğlu"]
+    out, _, known = team_news(None, squad, None, date(2026, 11, 5))
+    assert not known and out == []

@@ -8,12 +8,12 @@ Past match statistics and statistical estimates for upcoming La Liga and Premier
 
 A GitHub Actions workflow (`.github/workflows/update.yml`) runs every 3 hours:
 
-1. Downloads results and match stats from **football-data.co.uk** and fixtures, lineups, goals and Champions League matches from **ESPN's public feed**.
+1. Downloads results and match stats from **football-data.co.uk**, fixtures, lineups, goals and Champions League matches from **ESPN's public feed**, and team news from **FotMob**.
 2. Cross-checks the two sources stat by stat. A stat the sources disagree on is shown with both values and left out of the model for that match.
 3. Makes predictions for league matches in the next 10 days. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
 4. Writes the site data (`site/data/`) and publishes `site/` to GitHub Pages.
 
-Injury news is checked twice a week by a scheduled Claude task, which writes `data/overrides/injuries.json` (the manual override). Suspensions are worked out from cards.
+Team news (injured and suspended players) comes from **FotMob's public feed** for matches in the next 4 days. When FotMob has nothing, suspensions are worked out from cards. `data/overrides/injuries.json` is a manual override that is merged on top.
 
 ## Model
 

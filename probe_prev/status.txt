@@ -1,7 +1,0 @@
-403 48 sofa_sched.json https://api.sofascore.com/api/v1/sport/football/scheduled-events/2026-11-08
-403 48 sofa_sched2.json https://www.sofascore.com/api/v1/sport/football/scheduled-events/2026-11-08
-EID=
-200 229805 fotmob_matches.json https://www.fotmob.com/api/data/matches?date=20261108
-200 846883 fotmob_league.json https://www.fotmob.com/api/data/leagues?id=87
-200 2 espn_news_inj.json https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/teams/86/injuries
-200 195312 pi.html https://www.premierinjuries.com/injury-table.php

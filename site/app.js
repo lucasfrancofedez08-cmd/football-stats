@@ -172,7 +172,10 @@ function predictionCard(m, acc) {
   const adjs = P.adjustments || [];
   const statusLabel = { measured: "applied", provisional: "applied, provisional", info: "context only" };
   const miss = pr.missing || pr.suspended || {};
-  const susp = [...(miss.home || []).map(x => ({ ...x, team: m.home.short })), ...(miss.away || []).map(x => ({ ...x, team: m.away.short }))];
+  const doubt = pr.doubtful || {};
+  const tag = side => x => ({ ...x, team: side === "home" ? m.home.short : m.away.short });
+  const susp = [...(miss.home || []).map(tag("home")), ...(miss.away || []).map(tag("away"))];
+  const dbt = [...(doubt.home || []).map(tag("home")), ...(doubt.away || []).map(tag("away"))];
   return `
     ${strip(m.home, m.away, P.stats.goals)}
     <p class="meta"><span class="pill ${h(conf.level)}">${h(conf.level)} confidence</span>
@@ -185,8 +188,8 @@ function predictionCard(m, acc) {
     <p class="sub">Each change to the statistical base is listed with its effect. Provisional sizes are not yet calibrated on data.</p>
     ${adjs.length ? `<ul class="adj">${adjs.map(a => `<li><span class="eff">${a.effect_pct > 0 ? "+" : ""}${fx(a.effect_pct, 1)}%</span><span>${h(STAT[a.stat] || a.stat)}, ${h(a.side === "both" ? "both teams" : a.side === "home" ? m.home.short : m.away.short)}: ${h(a.detail)}</span><span class="pill ${h(a.status)}" title="${a.status === "info" ? "Shown for context; not used in the numbers" : a.status === "provisional" ? "Used in the numbers; size not yet calibrated on data" : "Used in the numbers; size measured on past seasons"}">${h(statusLabel[a.status] || a.status)}</span></li>`).join("")}</ul>` : `<p class="empty">No adjustments for this match.</p>`}
     <h2>Missing players</h2>
-    ${susp.length ? `<ul class="adj">${susp.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}${x.source ? ` <a href="${h(x.source)}" rel="noopener">source</a>` : ""}</span><span class="pill provisional">likely</span></li>`).join("")}</ul>` : `<p class="empty">No injuries or suspensions found.</p>`}
-    <p class="note">Suspensions are worked out from cards and may miss appeals or cup bans. Injuries come from news reports checked twice a week; they can be out of date, and a player listed here may still play.</p>
+    ${susp.length || dbt.length ? `<ul class="adj">${susp.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}</span><span class="pill provisional" title="Counted in the numbers">out</span></li>`).join("")}${dbt.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}</span><span class="pill info" title="Not counted in the numbers">may play</span></li>`).join("")}</ul>` : `<p class="empty">${pr.team_news ? "No injuries or suspensions reported." : "No team news yet."}</p>`}
+    <p class="note">${pr.team_news ? "Team news comes from FotMob in the last 4 days before kick-off and is refreshed every 3 hours. It can still change before the match." : "Team news appears 4 days before kick-off. Until then, only suspensions worked out from cards are counted, and they may miss appeals or cup bans."}</p>
     ${(P.analyst_view || []).length ? `<h2>Analyst view</h2><div class="panel">${P.analyst_view.map(x => `<p>${h(x)}</p>`).join("")}<p class="sub small">Opinion, not part of the numbers above.</p></div>` : ""}`;
 }
 
@@ -396,15 +399,17 @@ function renderAbout() {
   <p>Matchday Numbers shows past statistics and statistical estimates for upcoming La Liga and Premier League matches, plus full stats for the Champions League. It is an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
   <h2>Where the data comes from</h2>
   <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for both leagues, and referees for the Premier League.</li>
-  <li><b>ESPN</b>: fixtures, kick-off times, Champions League matches, lineups, goals, assists and minutes. ESPN's feed is public but unofficial, so it can change without notice.</li></ul>
+  <li><b>ESPN</b>: fixtures, kick-off times, Champions League matches, lineups, goals, assists and minutes.</li>
+  <li><b>FotMob</b>: team news (injured and suspended players) for the next few days' matches.</li></ul>
+  <p>The ESPN and FotMob feeds are public but unofficial, so they can change without notice. If one breaks, the site keeps the last good data and says so.</p>
   <p>Where both sources cover a match, they are compared stat by stat. If they disagree by more than a corner or card (two shots), that stat is shown with both values and left out of the model for that match. Data refreshes every three hours.</p>
   <h2>The model, in plain words</h2>
   <ol><li><b>Statistical base.</b> For each stat, start from the league average for home or away teams, then multiply by the home side's attacking strength and the away side's defensive weakness (and the other way round). Strengths compare a team with the league average; the last 6 games count double. Early in the season, or with few games, numbers are pulled toward last season's level (or a typical promoted team's). Goals also borrow from shots on target, which measure the same thing with less luck.</li>
-  <li><b>Adjustments</b>, each listed on the card with its effect: derby matches (more cards, measured on past seasons), likely suspensions (provisional), and short rest (provisional). Momentum and referee history are shown for context only, because they didn't improve accuracy in testing.</li>
+  <li><b>Adjustments</b>, each listed on the card with its effect: derby matches (more cards, measured on past seasons), missing players (provisional: a team's expected goals drop by 40% of the missing player's share of its goals and assists, and a missing regular keeper or defender adds 3% to the opponent), and short rest (provisional). Momentum and referee history are shown for context only, because they didn't improve accuracy in testing.</li>
   <li><b>Probabilities.</b> Goals use a Dixon-Coles model to get win/draw/loss, likely scores and over/under chances. Corners, cards and shots use a negative binomial distribution, which allows for more spread than a simple average suggests.</li></ol>
   <p>Confidence is Low, Medium or High depending on how many games the numbers rest on and how much the adjustments moved them.</p>
   <h2>What it can't do</h2>
-  <ul><li>Injuries aren't available from free sources, so they aren't counted. A star player being injured won't show up.</li>
+  <ul><li>Team news is only as good as FotMob's reports, and doubtful players aren't counted.</li>
   <li>Champions League predictions are left out: teams from different leagues can't be compared reliably yet.</li>
   <li>Corners and cards are hard to predict for anyone. The model beats league averages on them, but only slightly.</li>
   <li>Analyst views (new manager, motivation) are kept in a separate box and never mixed into the numbers.</li></ul>

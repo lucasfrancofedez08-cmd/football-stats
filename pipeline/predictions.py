@@ -39,6 +39,8 @@ def make(predictor, fixture, home, away, cur, ctx, made_at, model_version):
         "home": home, "away": away, "made_at": made_at, "model_version": model_version,
         "prediction": p, "baseline": baseline(predictor, cur),
         "missing": {"home": ctx.get("home_missing") or [], "away": ctx.get("away_missing") or []},
+        "doubtful": {"home": ctx.get("home_doubtful") or [], "away": ctx.get("away_doubtful") or []},
+        "team_news": bool(ctx.get("injuries_known")),
     })
 
 

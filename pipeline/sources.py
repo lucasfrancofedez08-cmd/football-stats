@@ -23,7 +23,10 @@ LEAGUES = {
     "champions-league": {"name": "Champions League", "espn": "uefa.champions", "fd": None, "country": "Europe"},
 }
 
-CALLS = {"espn": 0, "fd": 0, "errors": []}
+FOTMOB = "https://www.fotmob.com/api/data"
+FOTMOB_LEAGUE = {"premier-league": 47, "la-liga": 87}
+
+CALLS = {"espn": 0, "fd": 0, "fotmob": 0, "errors": []}
 
 
 def fetch(url, kind, retries=3, timeout=30):
@@ -197,6 +200,41 @@ def espn_team_last_match(team_espn_id, before_iso):
             league = (e.get("league") or {}).get("name") or ""
             best = (e["date"], league)
     return best
+
+
+# ---------------------------------------------------------------- FotMob (team news only)
+def fotmob_day(day):
+    """League matches on a day (YYYYMMDD): [{fotmob_id, league, home, away, kickoff}]."""
+    data = fetch(f"{FOTMOB}/matches?date={day}", "fotmob")
+    if not data:
+        return None
+    out = []
+    ids = {v: k for k, v in FOTMOB_LEAGUE.items()}
+    for L in json.loads(data).get("leagues", []):
+        lg = ids.get(L.get("primaryId"))
+        if not lg:
+            continue
+        for m in L.get("matches", []):
+            out.append({"fotmob_id": m["id"], "league": lg, "home": m["home"]["name"], "away": m["away"]["name"],
+                        "kickoff": (m.get("status") or {}).get("utcTime")})
+    return out
+
+
+def fotmob_unavailable(match_id):
+    """{'home': [...], 'away': [...]} players FotMob lists as unavailable for a match."""
+    data = fetch(f"{FOTMOB}/matchDetails?matchId={match_id}", "fotmob")
+    if not data:
+        return None
+    lu = (json.loads(data).get("content") or {}).get("lineup") or {}
+    out = {}
+    for side, key in (("home", "homeTeam"), ("away", "awayTeam")):
+        team = lu.get(key)
+        if team is None:
+            return None
+        out[side] = [{"name": u.get("name"), "type": (u.get("unavailability") or {}).get("type"),
+                      "expected_return": (u.get("unavailability") or {}).get("expectedReturn")}
+                     for u in team.get("unavailable") or []]
+    return out
 
 
 def now_utc():

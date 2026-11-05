@@ -91,34 +91,86 @@ def days_to_fetch(league, events, season, today):
     return sorted(days)
 
 
+_CHARS = str.maketrans({"ı": "i", "ø": "o", "Ø": "O", "ð": "d", "ł": "l", "Ł": "L", "æ": "ae", "ß": "ss", "đ": "d"})
+
+
 def norm(name):
-    s = unicodedata.normalize("NFKD", name or "").encode("ascii", "ignore").decode().lower()
-    return " ".join(s.replace("-", " ").split())
+    s = unicodedata.normalize("NFKD", (name or "").translate(_CHARS)).encode("ascii", "ignore").decode().lower()
+    return " ".join(s.replace("-", " ").replace(".", " ").split())
 
 
-def injuries_for(overrides, lg, team, squad, match_day, today):
-    """Injured players from data/overrides/injuries.json (news checked within 8 days).
-    Returns (list, known) where known=True if this team's list was checked recently."""
-    entry = (overrides.get("teams", {}).get(lg, {}) or {}).get(team)
-    if entry is None:
-        return [], False
-    checked = entry.get("checked")
-    if not checked or (today - date.fromisoformat(checked)).days > 8:
-        return [], False
+def find_player(name, squad):
+    """Squad entry for a name written by another source (accents, initials, surname only)."""
     by_norm = {norm(n): p for n, p in squad.items()}
-    out = []
-    for x in entry.get("out", []):
-        until = x.get("until")
-        if until and until < match_day:
+    k = norm(name)
+    if k in by_norm:
+        return by_norm[k]
+    last = k.split()[-1:] if k else []
+    cands = [p for n, p in by_norm.items() if last and n.split()[-1:] == last]
+    if len(cands) == 1:
+        return cands[0]
+    first = k.split()[:1]
+    cands = [p for n, p in by_norm.items() if first and len(k.split()) == 1 and n.split()[:1] == first]
+    return cands[0] if len(cands) == 1 else None
+
+
+NOT_OUT = ("doubtful", "back in training")
+
+
+def team_news(fm_side, squad, overrides_entry, today):
+    """Players out for this match. Returns (out, doubtful, known)."""
+    out, doubtful, known = [], [], False
+    if fm_side is not None:
+        known = True
+        for u in fm_side:
+            p = find_player(u["name"], squad)
+            rec = {"name": p["name"] if p else u["name"], "position": (p or {}).get("pos"),
+                   "source": "FotMob"}
+            ret = (u.get("expected_return") or "").strip()
+            if u.get("type") == "suspension":
+                rec["reason"] = "suspended"
+            elif ret.lower() in NOT_OUT:
+                rec["reason"] = f"injury, {ret.lower()}"
+                doubtful.append(rec)
+                continue
+            else:
+                rec["reason"] = f"injured{', back ' + ret if ret and ret.lower() != 'unknown' else ''}"
+            out.append(rec)
+    if overrides_entry and overrides_entry.get("checked") and \
+            (today - date.fromisoformat(overrides_entry["checked"])).days <= 8:
+        known = True
+        have = {norm(x["name"]) for x in out}
+        for x in overrides_entry.get("out", []):
+            p = find_player(x["name"], squad)
+            if norm((p or x)["name"]) not in have:
+                out.append({"name": (p or x)["name"], "position": (p or {}).get("pos"),
+                            "reason": x.get("reason") or "out", "source": x.get("source") or "manual"})
+    return out, doubtful, known
+
+
+def fotmob_ids(state_path, fixtures, league_of, now):
+    """Links upcoming ESPN fixtures to FotMob matches (same day, closest team names)."""
+    import difflib
+    ids = jload(state_path, {})
+    days = {}
+    for e in fixtures:
+        if e["espn_id"] not in ids:
+            days.setdefault(e["kickoff"][:10].replace("-", ""), []).append(e)
+    for d, evs in days.items():
+        fm = sources.fotmob_day(d)
+        if not fm:
             continue
-        p = by_norm.get(norm(x["name"]))
-        if p is None:  # try surname match
-            last = norm(x["name"]).split()[-1:]
-            cands = [q for k, q in by_norm.items() if last and k.split()[-1:] == last]
-            p = cands[0] if len(cands) == 1 else None
-        out.append({"name": p["name"] if p else x["name"], "position": (p or {}).get("pos"),
-                    "reason": f"{x.get('reason') or 'injured'} (news checked {checked})", "source": x.get("source")})
-    return out, True
+        for e in evs:
+            cands = [m for m in fm if m["league"] == league_of[e["espn_id"]]]
+            def sc(m):
+                return (difflib.SequenceMatcher(None, norm(m["home"]), norm(e["home"]["name"])).ratio()
+                        + difflib.SequenceMatcher(None, norm(m["away"]), norm(e["away"]["name"])).ratio())
+            if cands:
+                best = max(cands, key=sc)
+                if sc(best) >= 1.2:
+                    ids[e["espn_id"]] = best["fotmob_id"]
+    jsave(state_path, ids)
+    return ids
 
 
 def main():
@@ -224,6 +276,10 @@ def main():
     version = model_version()
     pdir = os.path.join(DATA, "predictions", season)
     overrides = jload(os.path.join(DATA, "overrides", "injuries.json"), {})
+    upcoming = [e for lg in DOMESTIC for e in events[lg].values()
+                if e.get("status") == "pre" and now < datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00")) < now + timedelta(days=4)]
+    league_of = {e["espn_id"]: lg for lg in DOMESTIC for e in events[lg].values()}
+    fm_ids = fotmob_ids(os.path.join(sdir, "fotmob_ids.json"), upcoming, league_of, now)
     made = frozen = 0
     for lg in DOMESTIC:
         prev = history_seasons(lg, season)
@@ -244,16 +300,21 @@ def main():
             cur = [m for m in matches[lg] if m["date"] < e["kickoff"][:10]]
             ctx = {"referee": referees.get((e["kickoff"][:10], home, away))
                    or referees.get(((ko - timedelta(days=1)).date().isoformat(), home, away))}
+            news = None
+            if ko - now < timedelta(days=4) and e["espn_id"] in fm_ids:
+                news = sources.fotmob_unavailable(fm_ids[e["espn_id"]])
             known = True
             for side, team in (("home", home), ("away", away)):
                 ctx[f"{side}_label"] = (team_map[lg].get(team) or {}).get("name") or team
                 sq = squad[lg].get(team, {})
                 ctx[f"{side}_squad"] = sq
-                susp = players.likely_suspended(lg, team, sq, cur) if sq else []
-                inj, ok = injuries_for(overrides, lg, team, sq, e["kickoff"][:10], today)
+                ov = (overrides.get("teams", {}).get(lg, {}) or {}).get(team)
+                out, doubtful, ok = team_news(news[side] if news else None, sq, ov, today)
+                if not ok:  # no team news: fall back to suspensions worked out from cards
+                    out = players.likely_suspended(lg, team, sq, cur) if sq else []
                 known = known and ok
-                names = {norm(x["name"]) for x in susp}
-                ctx[f"{side}_missing"] = susp + [x for x in inj if norm(x["name"]) not in names]
+                ctx[f"{side}_missing"] = out
+                ctx[f"{side}_doubtful"] = doubtful
                 if ko - now < timedelta(days=3):
                     last = sources.espn_team_last_match(e[side]["espn_id"], e["kickoff"])
                     if last:
@@ -290,7 +351,8 @@ def main():
     log["scored"] = len(scored)
 
     # ------------------------------------------------------------ 9. site data
-    log["calls"] = {"espn": sources.CALLS["espn"], "football_data": sources.CALLS["fd"]}
+    log["calls"] = {"espn": sources.CALLS["espn"], "football_data": sources.CALLS["fd"], "fotmob": sources.CALLS["fotmob"]}
+    log["team_news_linked"] = len(fm_ids)
     log["errors"] += sources.CALLS["errors"][-40:]
     log["finished"] = sources.now_utc().isoformat()
     site_data.write(ROOT, season, now, matches, events, summaries, fd, team_map, espn_teams, squad,
