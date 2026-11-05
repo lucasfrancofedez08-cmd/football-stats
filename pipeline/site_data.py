@@ -6,11 +6,11 @@ import json
 import os
 import re
 import unicodedata
+from datetime import timedelta
 
 from pipeline.predictions import aggregate, rnd
-from pipeline.sources import LEAGUES
+from pipeline.sources import DOMESTIC, EUROPE, LEAGUES, PREDICTED
 
-DOMESTIC = ["premier-league", "la-liga"]
 STATS = [("goals", "hg", "ag"), ("corners", "hc", "ac"), ("cards", "hcards", "acards"),
          ("shots", "hs", "as"), ("shots_on_target", "hst", "ast")]
 
@@ -64,10 +64,11 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
             eid = (team_map[lg].get(n) or {}).get("espn_id")
             ident[(lg, n)] = make_ident(eid, n)
             home_league[ident[(lg, n)]["slug"]] = lg
-    for e in events["champions-league"].values():
-        for side in ("home", "away"):
-            eid = e[side]["espn_id"]
-            ident[("champions-league", eid)] = make_ident(eid, e[side]["name"])
+    for lg in EUROPE:
+        for e in events[lg].values():
+            for side in ("home", "away"):
+                eid = e[side]["espn_id"]
+                ident[(lg, eid)] = make_ident(eid, e[side]["name"])
 
     def tid(lg, key):
         i = ident.get((lg, key)) or make_ident(None, str(key))
@@ -125,7 +126,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
     def table(lg):
         t = {}
         for m in matches[lg]:
-            if lg == "champions-league" and m["date"] >= f"20{season[2:]}-01-25":
+            if lg in EUROPE and m["date"] >= f"20{season[2:]}-01-25":
                 continue  # knockout rounds are not part of the league phase table
             for side, gf, ga in (("home", m["hg"], m["ag"]), ("away", m["ag"], m["hg"])):
                 me = tid(lg, m[side])
@@ -202,9 +203,25 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
             "key": lg, "name": LEAGUES[lg]["name"], "season": season, "table": table(lg),
             "upcoming": upcoming, "recent": recent, "matches_played": len(matches[lg]),
             "cross_check": {k: rep.get(k) for k in ("verified", "single", "conflict")} if rep else None,
-            "predictions_available": lg in DOMESTIC,
+            "predictions_available": lg in PREDICTED,
             "scorers": league_scorers(lg),
         })
+
+    # ---------------------------------------------------------------- home page bundle (one small file)
+    leaders, scorers_all = [], []
+    for lg in LEAGUES:
+        tb = table(lg)
+        leaders.append({"key": lg, "name": LEAGUES[lg]["name"], "kind": LEAGUES[lg]["kind"],
+                        "played": len(matches[lg]), "top": tb[:4]})
+        if lg in DOMESTIC:
+            scorers_all += [{**p, "comp": lg} for p in league_scorers(lg)]
+    scorers_all.sort(key=lambda p: (-p["goals"], -p["assists"], p["minutes"]))
+    week = [u for u in upcoming_all if u["kickoff"] <= (now + timedelta(days=7)).isoformat()[:16]]
+    pos = {(lg["key"], r["team"]["slug"]): r["pos"] for lg in leaders for r in table(lg["key"])}
+    for u in week:
+        u["rank"] = [pos.get((u["comp"], u["home"]["slug"])), pos.get((u["comp"], u["away"]["slug"]))]
+    dump(os.path.join(out, "home.json"), {"week": sorted(week, key=lambda u: u["kickoff"]), "leaders": leaders,
+                                          "scorers": scorers_all[:8]})
 
     # ---------------------------------------------------------------- search index
     idx = []
@@ -252,10 +269,17 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
     for slug, rs in rows.items():
         i = next(v for v in ident.values() if v["slug"] == slug)
         dom = home_league.get(slug)
-        lrows = [r for r in rs if r["comp"] == dom] if dom else [r for r in rs if r["comp"] == "champions-league"]
+        if dom:
+            comp = dom
+        else:  # club from a league we don't cover: use its busiest European competition
+            counts = {}
+            for r in rs:
+                counts[r["comp"]] = counts.get(r["comp"], 0) + 1
+            comp = max(counts, key=counts.get)
+        lrows = [r for r in rs if r["comp"] == comp]
         avg, rec = averages(lrows)
-        key = next((k for (lg, k), v in ident.items() if v["slug"] == slug and lg == (dom or "champions-league")), None)
-        sq = squad.get(dom or "champions-league", {}).get(key, {})
+        key = next((k for (lg, k), v in ident.items() if v["slug"] == slug and lg == comp), None)
+        sq = squad.get(comp, {}).get(key, {})
         team_goals = sum(r["goals"][0] for r in lrows) or 1
         scorers = sorted(sq.values(), key=lambda p: (-(p["goals"] + p["assists"]), -p["goals"], -p["minutes"]))
         scorers = [{"name": p["name"], "pos": p["pos"], "goals": p["goals"], "assists": p["assists"], "apps": p["apps"],
@@ -263,14 +287,14 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
                     "share_goals": p["goals"] / team_goals, "share_involvement": (p["goals"] + p["assists"]) / team_goals}
                    for p in scorers if p["goals"] + p["assists"] > 0][:12]
         ups = [u for u in upcoming_all if slug in (u["home"]["slug"], u["away"]["slug"])][:6]
-        teams_index.append({"slug": slug, "name": i["name"], "logo": i["logo"], "league": dom or "champions-league",
-                            "color": i.get("color")})
+        teams_index.append({"slug": slug, "name": i["name"], "logo": i["logo"], "league": comp,
+                            "color": i.get("color"), "domestic": bool(dom)})
         dump(os.path.join(out, "team", f"{slug}.json"), {
             "slug": slug, "name": i["name"], "logo": i["logo"], "color": i.get("color"), "alt_color": i.get("alt_color"),
-            "league": dom or "champions-league", "season": season,
+            "league": comp, "domestic": bool(dom), "season": season,
             "averages": avg, "record": rec, "form": {"last5": form(lrows, 5), "last10": form(lrows, 10)},
             "log": rs, "scorers": scorers, "upcoming": ups,
-            "europe": [r for r in rs if r["comp"] == "champions-league"] if dom else [],
+            "europe": [r for r in rs if r["comp"] in EUROPE] if dom else [],
         })
     dump(os.path.join(out, "teams.json"), sorted(teams_index, key=lambda t: t["name"]))
 
@@ -280,7 +304,14 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
     if os.path.exists(bpath):
         with open(bpath) as f:
             b = json.load(f)
-        bt = {"season": "2025-26", "leagues": ["Premier League", "La Liga"], "matches": 760,
+        bl = b.get("by_league", {})
+        bt = {"season": "2025-26", "leagues": [LEAGUES[k]["name"] for k in bl] or ["Premier League", "La Liga"],
+              "matches": b.get("matches", 760),
+              "by_league": {k: {"matches": v["matches"], "brier_1x2": v["brier_1x2"], "baseline_brier_1x2": v["baseline_brier_1x2"],
+                                "gain_x1000": {st: (x["baseline_objective"] - x["objective"]) * 1000 for st, x in v["stats"].items()},
+                                "mix_vs_pure_x1000": {st: (x["pure_objective"] - x["objective"]) * 1000 for st, x in v["stats"].items()},
+                                "gain_pct": {st: (1 - x["objective"] / x["baseline_objective"]) * 100 for st, x in v["stats"].items()}}
+                            for k, v in bl.items()},
               "test": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in b["test"].items()},
               "baseline": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in b["baseline"].items()},
               # log loss x1000 so small differences survive rounding
@@ -305,7 +336,8 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
     last_fd = {lg: max((m["date"] for m in fd[lg]), default=None) for lg in DOMESTIC}
     dump(os.path.join(out, "meta.json"), {
         "updated_at": now.isoformat(), "season": season, "season_label": f"20{season[:2]}-{season[2:]}",
-        "leagues": [{"key": k, "name": v["name"]} for k, v in LEAGUES.items()],
+        "leagues": [{"key": k, "name": v["name"], "short": v["short"], "kind": v["kind"], "country": v["country"]}
+                    for k, v in LEAGUES.items()],
         "sources": {"football_data_last_match": last_fd,
                     "espn_calls": log.get("calls", {}).get("espn"), "errors": len(log.get("errors", []))},
         "cross_check": {lg: reports[lg] and {k: reports[lg][k] for k in ("verified", "single", "conflict")} for lg in DOMESTIC},
@@ -315,11 +347,13 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
 
 def write_match_upcoming(out, u, pred, lg):
     note = None
-    if lg == "champions-league":
-        note = ("No prediction: Champions League teams come from different leagues, and their numbers "
-                "aren't comparable yet. Predictions for this competition will come in a later version.")
+    if lg in EUROPE:
+        note = (f"No estimate: {LEAGUES[lg]['name']} teams come from different leagues, and their numbers "
+                "can't be compared reliably yet. Full stats appear here after the match.")
+    elif lg not in PREDICTED:
+        note = "Estimates for this league are switched off: they didn't pass the test on last season."
     elif not pred:
-        note = "Prediction appears up to 10 days before kick-off."
+        note = "The estimate appears up to a month before kick-off."
     dump(os.path.join(out, "match", f"{u['id']}.json"), {
         "id": u["id"], "comp": lg, "kickoff": u["kickoff"], "status": "upcoming", "round": u.get("round"),
         "venue": u.get("venue"), "home": u["home"], "away": u["away"], "prediction": pred, "note": note})

@@ -2,7 +2,14 @@
 const app = document.getElementById("app");
 const STAT = { goals: "Goals", corners: "Corners", cards: "Cards", shots: "Shots", shots_on_target: "Shots on target" };
 const STAT_HELP = { cards: "yellow + red, both teams", corners: "both teams", goals: "both teams", shots: "both teams", shots_on_target: "both teams" };
-const LEAGUES = { "la-liga": "La Liga", "premier-league": "Premier League", "champions-league": "Champions League" };
+const LEAGUES = {
+  "premier-league": "Premier League", "la-liga": "La Liga", "serie-a": "Serie A", "bundesliga": "Bundesliga", "ligue-1": "Ligue 1",
+  "eredivisie": "Eredivisie", "primeira-liga": "Primeira Liga",
+  "champions-league": "Champions League", "europa-league": "Europa League", "conference-league": "Conference League",
+};
+const EUROPE = new Set(["champions-league", "europa-league", "conference-league"]);
+// usual Champions League places (incl. qualifying) and direct relegation; exact numbers vary by season
+const ZONES = { "premier-league": [4, 3], "la-liga": [4, 3], "serie-a": [4, 3], "bundesliga": [4, 2], "ligue-1": [3, 2], "eredivisie": [2, 2], "primeira-liga": [2, 2] };
 const BANNER = `<p class="banner">Statistical estimates, not advice. Football is unpredictable — use your own judgement.</p>`;
 let version = String(Date.now());
 const cache = {};
@@ -46,8 +53,8 @@ function disc(t, size = "sm") {
 const tlink = t => `<a class="tlink" href="#/team/${h(t.slug)}">${disc(t, "xs")}<span>${h(t.short || t.name)}</span></a>`;
 const norm = s => String(s || "").normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ı/g, "i").toLowerCase();
 const daysTo = iso => (new Date(iso) - Date.now()) / 86400000;
-const LTAG = { "la-liga": "La Liga", "premier-league": "Premier League", "champions-league": "Champions League" };
-const LSHORT = { "la-liga": "La Liga", "premier-league": "Premier League", "champions-league": "UCL" };
+const LTAG = LEAGUES;
+const LSHORT = { ...LEAGUES, "primeira-liga": "Primeira", "champions-league": "UCL", "europa-league": "UEL", "conference-league": "UECL" };
 
 /* colours: clubs' own colours, kept readable */
 function rgb(hex) {
@@ -115,7 +122,7 @@ function fixtureCard(u, showComp = false) {
        <div class="fc-exp"><div><b>${fx(p.goals)}</b>goals</div><div><b>${fx(p.corners)}</b>corners</div><div><b>${fx(p.cards)}</b>cards</div></div>`
     : `<div class="fc-team">${disc(u.home)}<span class="nm">${h(u.home.name)}</span><span></span></div>
        <div class="fc-team">${disc(u.away)}<span class="nm">${h(u.away.name)}</span><span></span></div>
-       <p class="fc-none">${u.comp === "champions-league" ? "Stats only for this competition" : "Estimate appears closer to kick-off"}</p>`;
+       <p class="fc-none">${EUROPE.has(u.comp) ? "Stats only for this competition" : "Estimate appears closer to kick-off"}</p>`;
   return `<a class="fcard" style="--hc:${css(hc)};--ac:${css(ac)}" href="#/match/${h(u.id)}">
     <div class="fc-top"><span>${showComp ? `<b class="ltag ${h(u.comp)}">${h(LSHORT[u.comp])}</b> ` : ""}${h(time(u.kickoff))}${u.round ? `, ${h(u.round)}` : ""}</span>${factTag(u)}</div>
     ${body}</a>`;
@@ -135,31 +142,15 @@ function resultItem(r) {
 function formDots(s, cls = "sm") { return `<span class="form ${cls}">${[...(s || "")].map(r => `<i class="${r}" title="${r === "W" ? "Win" : r === "D" ? "Draw" : "Loss"}">${r}</i>`).join("")}</span>`; }
 function tableHtml(rows, lg) {
   const n = rows.length;
-  const zone = r => (lg !== "champions-league" && r.pos <= 4 ? "z-top" : lg !== "champions-league" && r.pos > n - 3 ? "z-bot" : lg === "champions-league" && r.pos <= 8 ? "z-top" : "");
+  const z = ZONES[lg];
+  const zone = r => (EUROPE.has(lg) ? (r.pos <= 8 ? "z-top" : "") : z && r.pos <= z[0] ? "z-top" : z && r.pos > n - z[1] ? "z-bot" : "");
   return `<div class="tscroll"><table><thead><tr><th class="n">#</th><th>Team</th><th class="n">P</th><th class="n">W</th><th class="n">D</th><th class="n">L</th><th class="n">GD</th><th class="n">Pts</th><th>Last 5</th></tr></thead><tbody>
   ${rows.map(r => `<tr class="${zone(r)}"><td class="n pos">${r.pos}</td><td>${tlink(r.team)}</td><td class="n">${r.p}</td><td class="n">${r.w}</td><td class="n">${r.d}</td><td class="n">${r.l}</td><td class="n">${r.gd > 0 ? "+" : ""}${r.gd}</td><td class="n pts">${r.pts}</td><td>${formDots(r.form)}</td></tr>`).join("")}
   </tbody></table></div>
-  <div class="legend">${lg === "champions-league"
+  <div class="legend">${EUROPE.has(lg)
     ? `<span><i style="background:var(--pitch)"></i>Top 8 go straight to the last 16</span>`
-    : `<span><i style="background:var(--pitch)"></i>Champions League places</span><span><i style="background:var(--red)"></i>Relegation</span>`}</div>`;
+    : `<span><i style="background:var(--pitch)"></i>Usual Champions League places</span><span><i style="background:var(--red)"></i>Direct relegation</span>`}</div>`;
 }
-
-function featureBlock(u, label) {
-  const p = u.prediction;
-  return `<a class="feature grow" href="#/match/${h(u.id)}">
-    <div class="feature-top"><span>${h(label)}: ${h(LTAG[u.comp])}, ${h(kick(u.kickoff))}</span><span>${h(u.venue || "")}</span></div>
-    <div class="feature-teams"><span class="t">${disc(u.home, "md")}<span>${h(u.home.name)}</span></span><span class="x">v</span><span class="t a"><span>${h(u.away.name)}</span>${disc(u.away, "md")}</span></div>
-    ${p ? strip(u.home, u.away, p) : ""}
-    ${p ? `<div class="feature-exp"><span><b>${fx(p.goals)}</b> goals</span><span><b>${fx(p.corners)}</b> corners</span><span><b>${fx(p.cards)}</b> cards</span><span>expected</span></div>` : ""}
-  </a>`;
-}
-
-function scorerBars(list, n = 10) {
-  const top = list.slice(0, n), max = Math.max(...top.map(p => p.goals), 1);
-  return `<ol class="scorers">${top.map((p, i) => `<li><span class="rk">${i + 1}</span><a class="who" href="#/team/${h(p.team.slug)}">${disc(p.team, "xs")}<span><b>${h(p.name)}</b><span class="sub">${h(p.team.short || p.team.name)}</span></span></a>
-    <span class="gbar"><span style="width:${(p.goals / max) * 100}%;background:${css(pick(p.team) || [27, 106, 76])}"></span></span><span class="g">${p.goals}</span><span class="as">${p.assists ? `${p.assists} ast` : ""}</span></li>`).join("")}</ol>`;
-}
-
 async function renderLeague(lg) {
   try { localStorage.setItem("league", lg); } catch (e) { /* private mode */ }
   const L = await get(`league-${lg}.json`);
@@ -173,20 +164,22 @@ async function renderLeague(lg) {
   const soon = rest.filter(u => daysTo(u.kickoff) <= 14), later = rest.filter(u => daysTo(u.kickoff) > 14);
   app.innerHTML = `
     <section class="hero turf"><div class="wrap">
-      <nav class="tabs" aria-label="Competition">${Object.entries(LEAGUES).map(([k, v]) => `<a class="tab" href="#/league/${k}" aria-current="${k === lg}">${h(v)}</a>`).join("")}</nav>
+      <nav class="tabs" aria-label="Competition">${Object.entries(LEAGUES).map(([k, v]) => `${k === "champions-league" ? `<span class="tabsep" aria-hidden="true"></span>` : ""}<a class="tab" href="#/league/${k}" aria-current="${k === lg}">${h(v)}</a>`).join("")}</nav>
       <h1>${h(L.name)}</h1>
       <div class="hero-meta"><span><b>${L.matches_played}</b>matches played</span><span><b>${games ? fx(goals / games, 2) : "–"}</b>goals a game</span>${L.cross_check ? `<span><b>${L.cross_check.verified}</b>checked against two sources</span>` : ""}</div>
       ${featured}
     </div></section>
     ${wrap(`
-      ${L.predictions_available ? BANNER : `<p class="note">Champions League: full match stats and results. Estimates are left out for now, because teams from different leagues can't be compared reliably yet.</p>`}
+      ${L.predictions_available ? BANNER : EUROPE.has(lg)
+        ? `<p class="note">${h(L.name)}: full match stats and results. Estimates are left out, because teams from different leagues can't be compared reliably yet.</p>`
+        : `<p class="note">${h(L.name)}: full match stats and results. Estimates for this league are switched off because they didn't beat league averages in testing.</p>`}
       <section class="section"><h2>Next matches</h2>
       ${soon.length ? fixtureGroups(soon) : `<p class="empty">No other matches in the next two weeks.</p>`}
       ${later.length ? `<details class="more"><summary>Show the rest of the month (${later.length} more)</summary>${fixtureGroups(later)}</details>` : ""}</section>
       ${(L.scorers || []).length ? `<section class="section"><h2>Top scorers</h2>${scorerBars(L.scorers)}</section>` : ""}
       <section class="section"><h2>Latest results</h2>
       ${L.recent.length ? `<ul class="results">${L.recent.slice(0, 12).map(resultItem).join("")}</ul>` : `<p class="empty">No results yet.</p>`}</section>
-      <section class="section"><h2>${lg === "champions-league" ? "League phase table" : "Table"}</h2>${tableHtml(L.table, lg)}</section>`)}`;
+      <section class="section"><h2>${EUROPE.has(lg) ? "League phase table" : "Table"}</h2>${tableHtml(L.table, lg)}</section>`)}`;
 }
 
 /* ---------------------------------------------------------------- match */
@@ -362,7 +355,7 @@ async function renderMatch(id) {
         return `<tr><td>${STAT[s]}</td><td class="n">${fx(p.total)}</td><td class="n">${p.range[0]}–${p.range[1]}</td><td class="n">${r.actual_total}</td><td>${Object.entries(r.lines).map(([l, d]) => `over ${l} ${pct(d.p_over)} ${d.hit ? "✓" : "✗"}`).join(", ")}</td></tr>`;
       }).join("")}</tbody></table></div>
       <details><summary>Full estimate as it was frozen</summary>${predictionCard({ ...m, status: "finished" }, acc)}</details></section>`;
-  } else if (m.comp !== "champions-league") {
+  } else if (!EUROPE.has(m.comp)) {
     body += `<p class="note section">No frozen estimate for this match: it was played before estimates started on this site.</p>`;
   }
   if (m.lineups && m.lineups.home) {
@@ -424,7 +417,7 @@ async function renderTeam(slug) {
       </tbody></table></div>` : `<p class="empty">No player data yet.</p>`}</section>
     <section class="section"><h2>Game by game</h2>
     <div class="tscroll"><table><thead><tr><th>Date</th><th>Comp</th><th>Opponent</th><th class="n">H/A</th><th class="n">Score</th><th class="n">Corners</th><th class="n">Cards</th><th class="n">Shots</th><th class="n">On target</th></tr></thead><tbody>
-      ${[...t.log].reverse().map(r => `<tr><td><a href="#/match/${h(r.id)}">${h(day(r.kickoff || r.date))}</a></td><td class="sub">${r.comp === "champions-league" ? "UCL" : "League"}</td><td>${tlink(r.opp)}</td><td class="n">${r.venue}</td>
+      ${[...t.log].reverse().map(r => `<tr><td><a href="#/match/${h(r.id)}">${h(day(r.kickoff || r.date))}</a></td><td class="sub">${h(LSHORT[r.comp] || "")}</td><td>${tlink(r.opp)}</td><td class="n">${r.venue}</td>
         <td class="n">${formDots(r.result)} ${r.goals[0]}–${r.goals[1]}</td>
         ${["corners", "cards", "shots", "shots_on_target"].map(s => `<td class="n">${r[s][0] ?? "–"}–${r[s][1] ?? "–"}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div>
@@ -436,9 +429,10 @@ async function renderTeams() {
   title("Teams");
   setNav("teams");
   const groups = Object.keys(LEAGUES).map(k => [k, teams.filter(t => t.league === k)]);
+  const other = k => (EUROPE.has(k) ? `, clubs from other leagues` : "");
   const draw = q => groups.map(([k, ts]) => {
     const f = ts.filter(t => t.name.toLowerCase().includes(q));
-    return f.length ? `<section class="section"><h2>${h(LEAGUES[k])}${k === "champions-league" ? ", other clubs" : ""}</h2><ul class="teamgrid">${f.map(t => `<li><a href="#/team/${h(t.slug)}">${disc(t, "sm")}${h(t.name)}</a></li>`).join("")}</ul></section>` : "";
+    return f.length ? `<section class="section"><h2>${h(LEAGUES[k])}${other(k)}</h2><ul class="teamgrid">${f.map(t => `<li><a href="#/team/${h(t.slug)}">${disc(t, "sm")}${h(t.name)}</a></li>`).join("")}</ul></section>` : "";
   }).join("") || `<p class="empty">No team matches that name.</p>`;
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>Teams</h1><p class="sub" style="margin-top:8px">Season averages, form, scorers and every game.</p></div></section>
     ${wrap(`<label class="sub small" for="q">Find a team</label><br><input id="q" class="search" type="search" placeholder="Real Madrid, Arsenal…" autocomplete="off"><div id="tl">${draw("")}</div>`)}`;
@@ -474,6 +468,7 @@ function statTable(rows, base) {
         <td>${Object.entries(r.lines).map(([l, d]) => `over ${l}: ${pct(d.hit_rate)} (${fx(d.brier, 3)} vs ${fx(b ? b.lines[l].brier : d.baseline_brier, 3)})`).join("<br>")}</td></tr>`;
     }).join("")}</tbody></table></div>`;
 }
+const heat = v => (v == null ? "" : v >= 4 ? "h3" : v >= 1.5 ? "h2" : v >= 0 ? "h1" : "h0");
 async function renderAccuracy() {
   const acc = await get("accuracy.json");
   title("Track record");
@@ -499,7 +494,7 @@ async function renderAccuracy() {
     const better = Object.keys(po).filter(k => mo[k] < po[k]).map(k => STAT[k].toLowerCase());
     const worse = Object.keys(po).filter(k => mo[k] > po[k]).map(k => STAT[k].toLowerCase());
     body += `<section class="section"><h2>Tested on last season</h2>
-      <p>Tuned on 2023-24 and 2024-25, then run once over all ${bt.matches} Premier League and La Liga matches of 2025-26, each estimated using only games played before it. This is a test, not a live record.</p>
+      <p>Tuned on 2023-24 and 2024-25, then run once over all ${bt.matches} matches of 2025-26 in ${h((bt.leagues || []).join(", "))}, each estimated using only games played before it. This is a test, not a live record.</p>
       <p>Win/draw/loss Brier score <b>${fx(g.brier, 3)}</b> vs ${fx(gb.brier, 3)} for league averages, ${fx((1 - g.brier / gb.brier) * 100, 1)}% better.</p>
       ${Object.keys(mo).length ? duel(mo, bo) : ""}
       ${Object.keys(po).length ? `<h3 style="margin-top:22px">The 60/40 mix vs statistics alone</h3>
@@ -507,9 +502,14 @@ async function renderAccuracy() {
         <div class="tscroll"><table><thead><tr><th>Stat</th><th class="n">60/40 mix</th><th class="n">Statistics alone</th><th class="n">Difference</th></tr></thead><tbody>
         ${Object.keys(STAT).map(s => po[s] != null ? `<tr><td>${STAT[s]}</td><td class="n">${fx(mo[s] / 1000, 4)}</td><td class="n">${fx(po[s] / 1000, 4)}</td><td class="n">${sgn((mo[s] - po[s]) / po[s] * 100, 2)}%</td></tr>` : "").join("")}
         </tbody></table></div><p class="sub small" style="margin-top:6px">Almost a tie. The mix is slightly better on ${h(better.join(", ") || "nothing")}${worse.length ? ` and slightly worse on ${h(worse.join(", "))}` : ""}.</p>` : ""}
+      ${bt.by_league ? `<h3 style="margin-top:22px">League by league</h3>
+        <p class="small">How much smaller the model's error is than league averages, for each league and stat (log loss; higher is better, below zero means league averages did better).</p>
+        <div class="tscroll"><table class="heat"><thead><tr><th>League</th><th class="n">Matches</th><th class="n">Win/draw/loss</th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>
+        ${Object.entries(bt.by_league).map(([k, v]) => `<tr><td>${h(LEAGUES[k] || k)}</td><td class="n">${v.matches}</td><td class="n ${heat((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100)}">${sgn((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100, 1)}%</td>${Object.keys(STAT).map(st => `<td class="n ${heat(v.gain_pct[st])}">${sgn(v.gain_pct[st], 1)}%</td>`).join("")}</tr>`).join("")}
+        </tbody></table></div>` : ""}
       <h3 style="margin-top:22px">Lines in detail</h3>${statTable(bt.test, bt.baseline)}
       <h3 style="margin-top:22px">Calibration in testing</h3>${calibSvg(bt.calibration)}
-      <p class="sub small">Referee history didn't improve accuracy in testing, so it's shown on cards for context only. Derby matches had ${fx((bt.tuning.derby_cards - 1) * 100, 0)}% more cards than expected, so that adjustment is applied.</p></section>`;
+      <p class="sub small">Referee history didn't improve accuracy in testing, so it's shown on cards for context only. Derby matches had ${fx((bt.tuning.derby_cards - 1) * 100, 0)}% more cards than expected across the seven leagues, so that adjustment is applied.</p></section>`;
   }
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>Track record</h1>
     <p class="sub" style="margin-top:8px;max-width:64ch">Every estimate is frozen at kick-off and compared with what happened, misses included. A good model should beat plain league averages, and its 70% calls should come true about 70% of the time.</p></div></section>${wrap(body)}`;
@@ -520,10 +520,10 @@ function renderAbout() {
   title("How it works");
   setNav("about");
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>How it works</h1></div></section>${wrap(`<div class="prose">
-  <p>Matchday Numbers shows past statistics and statistical estimates for every La Liga and Premier League match in the next month, plus full stats for the Champions League. It's an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
+  <p>Matchday Numbers shows past statistics and statistical estimates for every match in the next month in the Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie and Primeira Liga, plus full stats for the Champions League, Europa League and Conference League. It's an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
   <h2>Where the data comes from</h2>
-  <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for both leagues, and referees for the Premier League.</li>
-  <li><b>ESPN</b>: fixtures, kick-off times, Champions League matches, lineups, goals, assists and minutes.</li>
+  <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for all seven leagues, and referees for the Premier League.</li>
+  <li><b>ESPN</b>: fixtures, kick-off times, European competition matches, lineups, goals, assists and minutes.</li>
   <li><b>FotMob</b>: team news (injured and suspended players) for the next few days' matches.</li></ul>
   <p>The ESPN and FotMob feeds are public but unofficial, so they can change without notice. Where football-data.co.uk and ESPN both cover a match, they're compared stat by stat; if they disagree by more than a corner or card (two shots), that stat is shown with both values and left out of the model for that match. Data refreshes every three hours.</p>
   <h2>The model, in plain words</h2>
@@ -534,7 +534,8 @@ function renderAbout() {
   <p>There's no High/Medium/Low confidence label. An earlier version had one, but on two past seasons it didn't predict which estimates turned out more accurate, so it was removed. Each estimate instead shows the plain facts: how many games it rests on, whether team news is included, and how far away kick-off is. The uncertainty itself is already in the percentages and likely ranges.</p>
   <h2>What it can't do</h2>
   <ul><li>Team news is only as good as FotMob's reports, and doubtful players aren't counted.</li>
-  <li>Champions League estimates are left out: teams from different leagues can't be compared reliably yet.</li>
+  <li>Champions League, Europa League and Conference League estimates are left out: teams from different leagues can't be compared reliably yet, and many clubs in them play in leagues this site doesn't cover.</li>
+  <li>Suspensions worked out from cards use La Liga's rule (a ban every 5th yellow) for every league except the Premier League, so they're approximate. FotMob's team news replaces them in the last 4 days.</li>
   <li>Corners and cards are hard to predict for anyone. The model beats league averages on them, but only slightly.</li>
   <li>Analyst views (new manager, motivation) are kept in a separate box and never mixed into the numbers.</li></ul>
   <p>Every estimate is saved in the project's public history before kick-off, so the track record can't be edited after the fact.</p></div>`)}`;
@@ -542,39 +543,49 @@ function renderAbout() {
 
 
 /* ---------------------------------------------------------------- home */
-function miniTable(L, n = 6) {
-  return `<div class="panel mini-t"><div class="mt-head"><h3>${h(L.name)}</h3><a href="#/league/${h(L.key)}">Full table</a></div>
-    <table><tbody>${L.table.slice(0, n).map(r => `<tr><td class="n pos-s">${r.pos}</td><td>${tlink(r.team)}</td><td>${formDots(r.form)}</td><td class="n pts">${r.pts}</td></tr>`).join("")}</tbody></table></div>`;
+function leaderCard(L) {
+  return `<a class="leader" href="#/league/${h(L.key)}"><div class="ld-head"><b class="ltag ${h(L.key)}">${h(LSHORT[L.key])}</b><span>${h(L.name)}</span></div>
+    ${L.top.length ? `<ol>${L.top.map(r => `<li><span class="pos-s">${r.pos}</span>${disc(r.team, "xs")}<span class="nm">${h(r.team.short || r.team.name)}</span>${formDots(r.form)}<b>${r.pts}</b></li>`).join("")}</ol>` : `<p class="sub small">No games yet.</p>`}</a>`;
 }
 function goalsBars(list) {
   const max = Math.max(...list.map(u => u.prediction.goals), 1);
   return `<ol class="scorers">${list.map((u, i) => `<li><span class="rk">${i + 1}</span><a class="who" href="#/match/${h(u.id)}">${disc(u.home, "xs")}${disc(u.away, "xs")}<span><b>${h(u.home.short || u.home.name)} v ${h(u.away.short || u.away.name)}</b><span class="sub">${h(LTAG[u.comp])}, ${h(day(u.kickoff))}</span></span></a>
     <span class="gbar"><span style="width:${(u.prediction.goals / max) * 100}%;background:var(--pitch)"></span></span><span class="g">${fx(u.prediction.goals)}</span><span class="as">goals</span></li>`).join("")}</ol>`;
 }
+function compactRows(list) {
+  const groups = {};
+  list.forEach(u => { const k = longDay(u.kickoff); (groups[k] = groups[k] || []).push(u); });
+  return Object.entries(groups).map(([k, us]) => `<div class="day">${h(k)}</div><ul class="sresults big">${us.map(u => {
+    const p = u.prediction;
+    const right = p ? `<span class="sr-p">${strip(u.home, u.away, p, false)}<span class="tri3"><b>${pct(p.home_win)}</b><b>${pct(p.draw)}</b><b>${pct(p.away_win)}</b></span></span>`
+      : `<span class="sub small">${EUROPE.has(u.comp) ? "stats only" : "estimate soon"}</span>`;
+    return `<li><a class="srow" href="#/match/${h(u.id)}"><span class="r-when">${h(time(u.kickoff))}<br><b class="ltag ${h(u.comp)}">${h(LSHORT[u.comp])}</b></span>
+      <span class="sr-t">${disc(u.home, "xs")}${h(u.home.name)}<span class="sub">v</span>${disc(u.away, "xs")}${h(u.away.name)}</span>${right}</a></li>`;
+  }).join("")}</ul>`).join("");
+}
+// how big a match is: table positions, nudged by competition (a judgement call, used only to pick featured games)
+const WEIGHT = { "premier-league": 0, "la-liga": 0, "serie-a": 1, "bundesliga": 1, "ligue-1": 3, "eredivisie": 6, "primeira-liga": 6 };
 async function renderHome() {
   title("");
   setNav("home");
-  const [ll, pl, cl, acc] = await Promise.all([get("league-la-liga.json"), get("league-premier-league.json"),
-    get("league-champions-league.json"), get("accuracy.json").catch(() => null)]);
-  const Ls = [ll, pl, cl];
-  const pos = {};
-  Ls.forEach(L => L.table.forEach(r => { pos[L.key + "/" + r.team.slug] = r.pos; }));
-  const all = Ls.flatMap(L => L.upcoming).sort((a, b) => a.kickoff.localeCompare(b.kickoff));
-  const size = u => (pos[u.comp + "/" + u.home.slug] || 20) + (pos[u.comp + "/" + u.away.slug] || 20);
-  const week = all.filter(u => u.prediction && daysTo(u.kickoff) <= 7).sort((a, b) => size(a) - size(b));
-  const top = week[0], big = week.slice(1, 5);
+  const [H, acc] = await Promise.all([get("home.json"), get("accuracy.json").catch(() => null)]);
+  const all = H.week;
+  const size = u => (u.rank[0] || 20) + (u.rank[1] || 20) + (WEIGHT[u.comp] ?? 4);
+  const ranked = all.filter(u => u.prediction).sort((a, b) => size(a) - size(b));
+  const top = ranked[0], big = ranked.slice(1, 7);
   const used = new Set([top, ...big].filter(Boolean).map(u => u.id));
-  const soon = all.filter(u => daysTo(u.kickoff) <= 3 && !used.has(u.id));
-  const goaly = all.filter(u => u.prediction && daysTo(u.kickoff) <= 7).sort((a, b) => b.prediction.goals - a.prediction.goals).slice(0, 5);
+  const soon = all.filter(u => daysTo(u.kickoff) <= 2 && !used.has(u.id));
+  const goaly = all.filter(u => u.prediction).sort((a, b) => b.prediction.goals - a.prediction.goals).slice(0, 6);
   const bt = acc && acc.backtest && acc.backtest.test ? acc.backtest : null;
   const live = acc && acc.live ? acc.live : null;
+  const nLeagues = bt && bt.by_league ? Object.keys(bt.by_league).length : 7;
   app.innerHTML = `
     <section class="hero turf home-hero"><div class="wrap">
       <h1>This week, in numbers</h1>
-      <p class="lede">Estimates for every La Liga and Premier League match in the next month, the inputs behind each one, and how often they've been right.</p>
+      <p class="lede">Estimates for every match in ${nLeagues} European leagues over the next month, full stats for the Champions, Europa and Conference League, the inputs behind each number, and how often they've been right.</p>
       <form class="bigsearch" role="search" data-search>
         <label class="sr" for="bq">Search teams and matches</label>
-        <input id="bq" type="search" placeholder="Search a team or a match, like Real Madrid Barcelona" autocomplete="off" spellcheck="false">
+        <input id="bq" type="search" placeholder="Search a team or a match, like Inter Milan" autocomplete="off" spellcheck="false">
         <div class="drop" hidden></div>
       </form>
       ${top ? featureBlock(top, "Match of the week") : ""}
@@ -582,14 +593,14 @@ async function renderHome() {
     ${wrap(`
       ${BANNER}
       ${big.length ? `<section><h2>Big matches this week</h2><div class="cards">${big.map(u => fixtureCard(u, true)).join("")}</div></section>` : ""}
-      ${soon.length ? `<section class="section"><h2>Next 3 days</h2>${fixtureGroups(soon, true)}</section>` : ""}
-      <section class="section"><h2>Tables at a glance</h2><div class="trio">${Ls.map(L => miniTable(L)).join("")}</div></section>
+      ${soon.length ? `<section class="section"><h2>Next 48 hours</h2>${compactRows(soon)}</section>` : ""}
+      <section class="section"><h2>League leaders</h2><div class="leaders">${H.leaders.map(leaderCard).join("")}</div></section>
       <div class="duo section">
         ${goaly.length ? `<section><h2>Most goals expected this week</h2>${goalsBars(goaly)}</section>` : ""}
-        <section><h2>Top scorers</h2>${scorerBars([...(ll.scorers || []), ...(pl.scorers || [])].sort((a, b) => b.goals - a.goals || b.assists - a.assists), 6)}</section>
+        <section><h2>Top scorers</h2>${scorerBars(H.scorers, 6)}</section>
       </div>
       ${bt ? `<section class="section"><h2>Are the estimates any good?</h2><div class="panel proof">
-        <div><b>${fx((1 - bt.test.goals.brier / bt.baseline.goals.brier) * 100, 1)}%</b><span>smaller error than league averages on win/draw/loss, tested on all ${bt.matches} league matches of 2025-26</span></div>
+        <div><b>${fx((1 - bt.test.goals.brier / bt.baseline.goals.brier) * 100, 1)}%</b><span>smaller error than league averages on win/draw/loss, tested on all ${bt.matches} matches of 2025-26 in ${nLeagues} leagues</span></div>
         <div><b>${live && live.matches ? live.matches : 0}</b><span>live estimates scored so far, every one frozen at kick-off</span></div>
         <div><a class="btn" href="#/accuracy">See the track record</a></div></div></section>` : ""}
     `)}`;
@@ -625,7 +636,7 @@ function searchRow(x, D) {
   const a = D.T[x.h] || { name: x.h, slug: x.h }, b = D.T[x.a] || { name: x.a, slug: x.a };
   const right = x.s ? `<span class="r-s">${x.s[0]}–${x.s[1]}</span>`
     : x.p ? `<span class="sr-p"><span class="mini">${`<span style="flex:${x.p[0]};background:var(--pitch)"></span><span class="d" style="flex:${x.p[1]}"></span><span style="flex:${x.p[2]};background:#55666b"></span>`}</span><span class="tri3"><b>${pct(x.p[0])}</b><b>${pct(x.p[1])}</b><b>${pct(x.p[2])}</b></span></span>`
-      : `<span class="sub small">${x.c === "champions-league" ? "stats only" : "estimate soon"}</span>`;
+      : `<span class="sub small">${EUROPE.has(x.c) ? "stats only" : "estimate soon"}</span>`;
   return `<li><a class="srow" href="#/match/${h(x.id)}"><span class="r-when">${h(day(x.k))}<br><b class="ltag ${h(x.c)}">${h(LSHORT[x.c])}</b></span>
     <span class="sr-t">${disc(a, "xs")}${h(a.name)}<span class="sub">v</span>${disc(b, "xs")}${h(b.name)}</span>${right}</a></li>`;
 }

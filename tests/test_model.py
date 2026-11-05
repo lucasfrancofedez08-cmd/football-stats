@@ -144,3 +144,23 @@ def test_team_news_matching_and_doubtful():
     assert [x["name"] for x in doubtful] == ["Ferdi Kadıoğlu"]
     out, _, known = team_news(None, squad, None, date(2026, 11, 5))
     assert not known and out == []
+
+
+def test_months_to_fetch_first_run_and_window():
+    from datetime import date
+    from pipeline.run import months_to_fetch
+    first = months_to_fetch("bundesliga", {}, "2627", date(2026, 11, 5))
+    assert first[0] == "202607" and first[-1] == "202612" and len(first) == len(set(first))
+    later = months_to_fetch("bundesliga", {"1": {"kickoff": "2026-10-01T18:30Z", "completed": True}}, "2627", date(2026, 11, 3))
+    assert later == ["202610", "202611", "202612"]
+
+
+def test_every_domestic_league_has_history_and_derbies():
+    from pipeline.sources import DOMESTIC
+    from model.adjustments import DERBIES
+    names = {n for pair in DERBIES for n in pair}
+    for lg in DOMESTIC:
+        ss = seasons(lg)
+        assert all(len(s) >= 300 for s in ss), lg
+        teams = {m["home"] for s in ss for m in s}
+        assert names & teams, f"no derby defined for {lg}"

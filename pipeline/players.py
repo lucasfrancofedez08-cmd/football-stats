@@ -72,10 +72,10 @@ def likely_suspended(league, team, players, matches):
         total = sum(x[1] for x in log)
         before = total - y_last
         n = len(games)
-        if league == "la-liga":
-            hit = total // 5 > before // 5
-        else:
+        if league == "premier-league":
             hit = (before < 5 <= total and n <= 19) or (before < 10 <= total and n <= 32)
+        else:  # La Liga's rule (every 5th yellow); other leagues' rules differ in detail, so this is approximate
+            hit = total // 5 > before // 5
         if hit:
             out.append({"name": p["name"], "position": p.get("pos"),
                         "reason": f"yellow-card ban ({total} yellows)"})

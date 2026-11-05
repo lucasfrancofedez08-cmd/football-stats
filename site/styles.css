@@ -371,3 +371,31 @@ td.pts { font-weight: 800; }
 .gchart { width: 100%; height: auto; display: block; }
 .gchart .cv { font-size: 12px; font-weight: 800; fill: var(--ink); font-stretch: 70%; }
 .gchart .cl { font-size: 10.5px; fill: var(--muted); font-weight: 650; }
+
+/* ---------- v4: more competitions ---------- */
+.tabsep { width: 1px; align-self: stretch; background: rgba(255,255,255,.25); margin: 2px 4px; }
+.ltag.serie-a { background: #e2edf8; color: #134a85; }
+.ltag.bundesliga { background: #f8e1e1; color: #a1191d; }
+.ltag.ligue-1 { background: #e8edf3; color: #1f2b49; }
+.ltag.eredivisie { background: #fde9da; color: #a84d0b; }
+.ltag.primeira-liga { background: #e3f1e6; color: #1f6a36; }
+.ltag.europa-league { background: #fbead6; color: #8a4b05; }
+.ltag.conference-league { background: #e4f4ec; color: #136442; }
+@media (prefers-color-scheme: dark) {
+  .ltag.serie-a { background: #1b2c41; color: #9fc5f2; } .ltag.bundesliga { background: #3d1c1d; color: #f2a3a5; }
+  .ltag.ligue-1 { background: #232b39; color: #c3cde0; } .ltag.eredivisie { background: #3b2516; color: #f5b789; }
+  .ltag.primeira-liga { background: #1a3222; color: #9fdcb1; } .ltag.europa-league { background: #382813; color: #f1c27e; }
+  .ltag.conference-league { background: #17332a; color: #92dcb9; }
+}
+.leaders { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+.leader { display: block; background: var(--paper); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px 8px; color: var(--ink); text-decoration: none; }
+.leader:hover { border-color: var(--pitch); }
+.ld-head { display: flex; align-items: center; gap: 8px; font-weight: 750; font-stretch: var(--semi); margin-bottom: 6px; }
+.leader ol { list-style: none; padding: 0; margin: 0; }
+.leader li { display: grid; grid-template-columns: 18px 24px 1fr auto 26px; gap: 8px; align-items: center; padding: 5px 0; border-top: 1px solid var(--line); font-size: .9rem; }
+.leader li .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
+.leader li b { text-align: right; font-stretch: var(--narrow); font-size: 1.05rem; }
+table.heat td.h3 { background: color-mix(in srgb, var(--pitch) 30%, transparent); }
+table.heat td.h2 { background: color-mix(in srgb, var(--pitch) 18%, transparent); }
+table.heat td.h1 { background: color-mix(in srgb, var(--pitch) 7%, transparent); }
+table.heat td.h0 { background: var(--red-soft); color: var(--red); }

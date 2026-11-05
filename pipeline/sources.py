@@ -17,14 +17,25 @@ UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chr
 ESPN = "https://site.api.espn.com/apis/site/v2/sports/soccer"
 FD = "https://www.football-data.co.uk"
 
+# kind "domestic": estimates + cross-checked stats; kind "europe": stats only (teams from different leagues)
 LEAGUES = {
-    "premier-league": {"name": "Premier League", "espn": "eng.1", "fd": "E0", "country": "England"},
-    "la-liga": {"name": "La Liga", "espn": "esp.1", "fd": "SP1", "country": "Spain"},
-    "champions-league": {"name": "Champions League", "espn": "uefa.champions", "fd": None, "country": "Europe"},
+    "premier-league": {"name": "Premier League", "short": "Premier League", "espn": "eng.1", "fd": "E0", "fotmob": 47, "country": "England", "kind": "domestic"},
+    "la-liga": {"name": "La Liga", "short": "La Liga", "espn": "esp.1", "fd": "SP1", "fotmob": 87, "country": "Spain", "kind": "domestic"},
+    "serie-a": {"name": "Serie A", "short": "Serie A", "espn": "ita.1", "fd": "I1", "fotmob": 55, "country": "Italy", "kind": "domestic"},
+    "bundesliga": {"name": "Bundesliga", "short": "Bundesliga", "espn": "ger.1", "fd": "D1", "fotmob": 54, "country": "Germany", "kind": "domestic"},
+    "ligue-1": {"name": "Ligue 1", "short": "Ligue 1", "espn": "fra.1", "fd": "F1", "fotmob": 53, "country": "France", "kind": "domestic"},
+    "eredivisie": {"name": "Eredivisie", "short": "Eredivisie", "espn": "ned.1", "fd": "N1", "fotmob": 57, "country": "Netherlands", "kind": "domestic"},
+    "primeira-liga": {"name": "Primeira Liga", "short": "Primeira", "espn": "por.1", "fd": "P1", "fotmob": 61, "country": "Portugal", "kind": "domestic"},
+    "champions-league": {"name": "Champions League", "short": "UCL", "espn": "uefa.champions", "fd": None, "fotmob": 42, "country": "Europe", "kind": "europe"},
+    "europa-league": {"name": "Europa League", "short": "UEL", "espn": "uefa.europa", "fd": None, "fotmob": 73, "country": "Europe", "kind": "europe"},
+    "conference-league": {"name": "Conference League", "short": "UECL", "espn": "uefa.europa.conf", "fd": None, "fotmob": 10216, "country": "Europe", "kind": "europe"},
 }
-
+DOMESTIC = [k for k, v in LEAGUES.items() if v["kind"] == "domestic"]
+# leagues whose estimates passed the backtest (beat league averages on 2025-26); others show stats only
+PREDICTED = ["premier-league", "la-liga"]
+EUROPE = [k for k, v in LEAGUES.items() if v["kind"] == "europe"]
 FOTMOB = "https://www.fotmob.com/api/data"
-FOTMOB_LEAGUE = {"premier-league": 47, "la-liga": 87}
+FOTMOB_LEAGUE = {k: LEAGUES[k]["fotmob"] for k in DOMESTIC}
 
 CALLS = {"espn": 0, "fd": 0, "fotmob": 0, "errors": []}
 
@@ -69,9 +80,9 @@ def fd_fixtures_csv():
 
 
 # ---------------------------------------------------------------- ESPN
-def espn_scoreboard(league, day):
-    """All events of one day (YYYYMMDD) for a league."""
-    data = fetch(f"{ESPN}/{LEAGUES[league]['espn']}/scoreboard?dates={day}", "espn")
+def espn_scoreboard(league, when):
+    """All events of one day (YYYYMMDD) or one month (YYYYMM) for a league."""
+    data = fetch(f"{ESPN}/{LEAGUES[league]['espn']}/scoreboard?dates={when}&limit=500", "espn")
     if not data:
         return None
     return [parse_event(e) for e in json.loads(data).get("events", [])]

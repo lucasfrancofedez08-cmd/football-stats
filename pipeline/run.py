@@ -19,13 +19,12 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from model.data import load_file  # noqa: E402
 from model.predict import Predictor  # noqa: E402
 from pipeline import merge, players, predictions, site_data, sources, teams  # noqa: E402
-from pipeline.sources import LEAGUES  # noqa: E402
+from pipeline.sources import DOMESTIC, EUROPE, LEAGUES, PREDICTED  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
 HISTORY = os.path.join(DATA, "history")
 UPCOMING_DAYS = 31
-DOMESTIC = ["premier-league", "la-liga"]
 
 
 def jload(path, default):
@@ -54,7 +53,7 @@ def model_version():
 
 def season_start(season, league):
     y = 2000 + int(season[:2])
-    return date(y, 9, 1) if league == "champions-league" else date(y, 8, 1)
+    return date(y, 9, 1) if league in EUROPE else date(y, 7, 25)
 
 
 def history_seasons(league, season):
@@ -79,16 +78,28 @@ def roll_history(season, sdir):
             shutil.copy(src, dst)
 
 
-def days_to_fetch(league, events, season, today):
+def _month(d):
+    return d.strftime("%Y%m")
+
+
+def months_to_fetch(league, events, season, today):
+    """ESPN scoreboard months to (re)load: the whole season so far on the first run, then the
+    current window (4 days back to a month ahead) plus months holding unfinished past games."""
     if not events:
-        start = season_start(season, league)
-        return [start + timedelta(days=i) for i in range((today - start).days + UPCOMING_DAYS + 1)]
-    days = {today + timedelta(days=i) for i in range(-4, UPCOMING_DAYS + 1)}
+        d, end, out = season_start(season, league), today + timedelta(days=UPCOMING_DAYS), []
+        while d <= end:
+            if _month(d) not in out:
+                out.append(_month(d))
+            d += timedelta(days=27)
+        if _month(end) not in out:
+            out.append(_month(end))
+        return out
+    months = {_month(today - timedelta(days=4)), _month(today), _month(today + timedelta(days=UPCOMING_DAYS))}
     for e in events.values():
         d = date.fromisoformat(e["kickoff"][:10])
         if not e.get("completed") and today - timedelta(days=60) <= d < today:
-            days.add(d)
-    return sorted(days)
+            months.add(_month(d))
+    return sorted(months)
 
 
 _CHARS = str.maketrans({"ı": "i", "ø": "o", "Ø": "O", "ð": "d", "ł": "l", "Ł": "L", "æ": "ae", "ß": "ss", "đ": "d"})
@@ -199,10 +210,12 @@ def main():
         path = os.path.join(sdir, f"espn_events_{lg}.json")
         ev = jload(path, {})
         fetched = 0
-        for d in days_to_fetch(lg, ev, season, today):
-            res = sources.espn_scoreboard(lg, d.strftime("%Y%m%d"))
+        for mo in months_to_fetch(lg, ev, season, today):
+            res = sources.espn_scoreboard(lg, mo)
             if res is None:
                 continue
+            if len(res) >= 500:
+                log["errors"].append(f"{lg} {mo}: ESPN month query hit its limit, some games may be missing")
             fetched += 1
             for e in res:
                 ev[e["espn_id"]] = e
@@ -224,7 +237,7 @@ def main():
                 new += 1
         jsave(spath, summ)
         summaries[lg] = summ
-        log["leagues"][lg] = {"scoreboard_days": fetched, "events": len(ev), "new_summaries": new}
+        log["leagues"][lg] = {"scoreboard_months": fetched, "events": len(ev), "new_summaries": new}
 
     # ------------------------------------------------------------ 3. football-data.co.uk
     fd = {}
@@ -274,26 +287,25 @@ def main():
         matches[lg], reports[lg] = merge.merge_league(lg, season, fd[lg], list(events[lg].values()), summaries[lg], fe)
         log["leagues"][lg]["cross_check"] = {k: v for k, v in reports[lg].items() if k != "conflicts"}
         log["leagues"][lg]["conflicts"] = reports[lg]["conflicts"][-30:]
-    matches["champions-league"] = merge.ucl_records(list(events["champions-league"].values()),
-                                                     summaries["champions-league"], season)
+    for lg in EUROPE:
+        matches[lg] = merge.europe_records(lg, list(events[lg].values()), summaries[lg], season)
 
     # ------------------------------------------------------------ 6. players
     squad = {}
-    for lg in DOMESTIC:
+    for lg in LEAGUES:
         squad[lg] = players.season_players(matches[lg], summaries[lg], lambda m, side: m[side])
-    squad["champions-league"] = players.season_players(matches["champions-league"], summaries["champions-league"],
-                                                       lambda m, side: m[side])
 
     # ------------------------------------------------------------ 7. predictions (freeze at kick-off)
     version = model_version()
     pdir = os.path.join(DATA, "predictions", season)
     overrides = jload(os.path.join(DATA, "overrides", "injuries.json"), {})
-    upcoming = [e for lg in DOMESTIC for e in events[lg].values()
+    upcoming = [e for lg in PREDICTED for e in events[lg].values()
                 if e.get("status") == "pre" and now < datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00")) < now + timedelta(days=4)]
     league_of = {e["espn_id"]: lg for lg in DOMESTIC for e in events[lg].values()}
     fm_ids = fotmob_ids(os.path.join(sdir, "fotmob_ids.json"), upcoming, league_of, now)
     made = frozen = 0
-    for lg in DOMESTIC:
+    for lg in PREDICTED:
+        made_lg = made
         prev = history_seasons(lg, season)
         predictor = Predictor(lg, prev)
         fe = fd_of_espn[lg]
@@ -341,6 +353,7 @@ def main():
             except Exception as ex:  # one bad fixture must not stop the run
                 log["errors"].append(f"prediction {lg} {e['espn_id']}: {ex!r}")
                 traceback.print_exc()
+        log["leagues"][lg]["predictions"] = made - made_lg
     log["predictions"] = {"made_or_updated": made, "frozen_total": frozen}
 
     # ------------------------------------------------------------ 8. score frozen predictions

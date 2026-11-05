@@ -117,13 +117,14 @@ def merge_league(league, season, fd_matches, espn_events, summaries, fd_of_espn)
     return out, report
 
 
-def ucl_records(espn_events, summaries, season):
+def europe_records(league, espn_events, summaries, season):
+    """European competition matches: ESPN only (football-data.co.uk doesn't cover them)."""
     out = []
     for e in espn_events:
         if not e.get("completed"):
             continue
         s = summaries.get(e["espn_id"])
-        rec = record_from_espn("champions-league", season, e, s, e["home"]["espn_id"], e["away"]["espn_id"])
+        rec = record_from_espn(league, season, e, s, e["home"]["espn_id"], e["away"]["espn_id"])
         rec.update({"espn_id": e["espn_id"], "kickoff": e["kickoff"], "venue": (s or {}).get("venue") or e.get("venue"),
                     "sources": ["ESPN"], "checks": {k: "single" for k in CHECKS}, "round": e.get("round")})
         out.append(finish(rec))
