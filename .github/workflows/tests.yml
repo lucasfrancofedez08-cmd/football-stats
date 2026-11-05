@@ -7,11 +7,12 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
       - run: pip install pytest playwright
-      - run: python -m playwright install --with-deps chromium
+      # uses the Google Chrome already installed on GitHub's runners (no browser download)
       - run: python -m pytest -q
