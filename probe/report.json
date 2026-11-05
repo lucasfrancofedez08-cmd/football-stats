@@ -1,0 +1,956 @@
+{
+ "bundesliga": {
+  "fd": {
+   "2122": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "13/08/2021",
+    "last": "14/05/2022"
+   },
+   "2223": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "05/08/2022",
+    "last": "27/05/2023"
+   },
+   "2324": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "18/08/2023",
+    "last": "18/05/2024"
+   },
+   "2425": {
+    "rows": 306,
+    "has": {
+     "HS": 305,
+     "HST": 305,
+     "HC": 305,
+     "HY": 305,
+     "HR": 305,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "23/08/2024",
+    "last": "17/05/2025"
+   },
+   "2526": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "22/08/2025",
+    "last": "16/05/2026"
+   },
+   "2627": {
+    "rows": 72,
+    "has": {
+     "HS": 72,
+     "HST": 72,
+     "HC": 72,
+     "HY": 72,
+     "HR": 72,
+     "Referee": null,
+     "HxG": 72
+    },
+    "first": "28/08/2026",
+    "last": "01/11/2026"
+   }
+  },
+  "espn": {
+   "events": 8,
+   "completed": 8,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 40,
+   "key_events": 29,
+   "past_season_events": 5,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Bundesliga",
+   "matches": 9,
+   "unavailable": [
+    4,
+    3
+   ]
+  }
+ },
+ "serie-a": {
+  "fd": {
+   "2122": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "21/08/2021",
+    "last": "22/05/2022"
+   },
+   "2223": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "13/08/2022",
+    "last": "04/06/2023"
+   },
+   "2324": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "19/08/2023",
+    "last": "02/06/2024"
+   },
+   "2425": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "17/08/2024",
+    "last": "25/05/2025"
+   },
+   "2526": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "23/08/2025",
+    "last": "24/05/2026"
+   },
+   "2627": {
+    "rows": 100,
+    "has": {
+     "HS": 100,
+     "HST": 100,
+     "HC": 100,
+     "HY": 100,
+     "HR": 100,
+     "Referee": null,
+     "HxG": 100
+    },
+    "first": "22/08/2026",
+    "last": "02/11/2026"
+   }
+  },
+  "espn": {
+   "events": 10,
+   "completed": 10,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 50,
+   "key_events": 36,
+   "past_season_events": 3,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Serie A",
+   "matches": 10,
+   "unavailable": [
+    5,
+    2
+   ]
+  }
+ },
+ "ligue-1": {
+  "fd": {
+   "2122": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "06/08/2021",
+    "last": "21/05/2022"
+   },
+   "2223": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "05/08/2022",
+    "last": "03/06/2023"
+   },
+   "2324": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "11/08/2023",
+    "last": "19/05/2024"
+   },
+   "2425": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "16/08/2024",
+    "last": "17/05/2025"
+   },
+   "2526": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "15/08/2025",
+    "last": "17/05/2026"
+   },
+   "2627": {
+    "rows": 81,
+    "has": {
+     "HS": 81,
+     "HST": 81,
+     "HC": 81,
+     "HY": 81,
+     "HR": 81,
+     "Referee": null,
+     "HxG": 81
+    },
+    "first": "21/08/2026",
+    "last": "02/11/2026"
+   }
+  },
+  "espn": {
+   "events": 6,
+   "completed": 6,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 40,
+   "key_events": 27,
+   "past_season_events": 3,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Ligue 1",
+   "matches": 9,
+   "unavailable": [
+    5,
+    3
+   ]
+  }
+ },
+ "eredivisie": {
+  "fd": {
+   "2122": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "13/08/2021",
+    "last": "15/05/2022"
+   },
+   "2223": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "05/08/2022",
+    "last": "28/05/2023"
+   },
+   "2324": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "11/08/2023",
+    "last": "19/05/2024"
+   },
+   "2425": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "09/08/2024",
+    "last": "18/05/2025"
+   },
+   "2526": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "08/08/2025",
+    "last": "17/05/2026"
+   },
+   "2627": {
+    "rows": 99,
+    "has": {
+     "HS": 99,
+     "HST": 99,
+     "HC": 99,
+     "HY": 99,
+     "HR": 99,
+     "Referee": null,
+     "HxG": 99
+    },
+    "first": "07/08/2026",
+    "last": "01/11/2026"
+   }
+  },
+  "espn": {
+   "events": 9,
+   "completed": 9,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 46,
+   "key_events": 30,
+   "past_season_events": 4,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Eredivisie",
+   "matches": 9,
+   "unavailable": [
+    0,
+    0
+   ]
+  }
+ },
+ "primeira-liga": {
+  "fd": {
+   "2122": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "06/08/2021",
+    "last": "15/05/2022"
+   },
+   "2223": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "05/08/2022",
+    "last": "27/05/2023"
+   },
+   "2324": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "11/08/2023",
+    "last": "18/05/2024"
+   },
+   "2425": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "09/08/2024",
+    "last": "17/05/2025"
+   },
+   "2526": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "08/08/2025",
+    "last": "16/05/2026"
+   },
+   "2627": {
+    "rows": 90,
+    "has": {
+     "HS": 90,
+     "HST": 90,
+     "HC": 90,
+     "HY": 90,
+     "HR": 90,
+     "Referee": null,
+     "HxG": 90
+    },
+    "first": "07/08/2026",
+    "last": "02/11/2026"
+   }
+  },
+  "espn": {
+   "events": 8,
+   "completed": 8,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 43,
+   "key_events": 22,
+   "past_season_events": 4,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Liga Portugal",
+   "matches": 9,
+   "unavailable": [
+    3,
+    0
+   ]
+  }
+ },
+ "scottish-premiership": {
+  "fd": {
+   "2122": {
+    "rows": 228,
+    "has": {
+     "HS": 228,
+     "HST": 228,
+     "HC": 228,
+     "HY": 228,
+     "HR": 228,
+     "Referee": 228,
+     "HxG": null
+    },
+    "first": "31/07/2021",
+    "last": "15/05/2022"
+   },
+   "2223": {
+    "rows": 228,
+    "has": {
+     "HS": 228,
+     "HST": 228,
+     "HC": 228,
+     "HY": 228,
+     "HR": 228,
+     "Referee": 228,
+     "HxG": null
+    },
+    "first": "30/07/2022",
+    "last": "28/05/2023"
+   },
+   "2324": {
+    "rows": 228,
+    "has": {
+     "HS": 228,
+     "HST": 228,
+     "HC": 228,
+     "HY": 228,
+     "HR": 228,
+     "Referee": 228,
+     "HxG": null
+    },
+    "first": "05/08/2023",
+    "last": "19/05/2024"
+   },
+   "2425": {
+    "rows": 228,
+    "has": {
+     "HS": 228,
+     "HST": 228,
+     "HC": 228,
+     "HY": 228,
+     "HR": 228,
+     "Referee": 228,
+     "HxG": null
+    },
+    "first": "03/08/2024",
+    "last": "18/05/2025"
+   },
+   "2526": {
+    "rows": 228,
+    "has": {
+     "HS": 228,
+     "HST": 228,
+     "HC": 228,
+     "HY": 228,
+     "HR": 228,
+     "Referee": 228,
+     "HxG": null
+    },
+    "first": "02/08/2025",
+    "last": "17/05/2026"
+   },
+   "2627": {
+    "rows": 69,
+    "has": {
+     "HS": 69,
+     "HST": 69,
+     "HC": 69,
+     "HY": 69,
+     "HR": 69,
+     "Referee": 69,
+     "HxG": 69
+    },
+    "first": "31/07/2026",
+    "last": "01/11/2026"
+   }
+  },
+  "espn": {
+   "events": 4,
+   "completed": 3,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 40,
+   "key_events": 16,
+   "past_season_events": 5,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Premiership",
+   "matches": 6,
+   "unavailable": [
+    3,
+    2
+   ]
+  }
+ },
+ "belgian-pro-league": {
+  "fd": {
+   "2122": {
+    "rows": 306,
+    "has": {
+     "HS": 303,
+     "HST": 303,
+     "HC": 303,
+     "HY": 304,
+     "HR": 304,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "23/07/2021",
+    "last": "10/04/2022"
+   },
+   "2223": {
+    "rows": 306,
+    "has": {
+     "HS": 304,
+     "HST": 304,
+     "HC": 304,
+     "HY": 304,
+     "HR": 304,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "22/07/2022",
+    "last": "23/04/2023"
+   },
+   "2324": {
+    "rows": 312,
+    "has": {
+     "HS": 312,
+     "HST": 312,
+     "HC": 312,
+     "HY": 312,
+     "HR": 312,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "28/07/2023",
+    "last": "02/06/2024"
+   },
+   "2425": {
+    "rows": 312,
+    "has": {
+     "HS": 311,
+     "HST": 311,
+     "HC": 311,
+     "HY": 311,
+     "HR": 311,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "27/07/2024",
+    "last": "25/05/2025"
+   },
+   "2526": {
+    "rows": 311,
+    "has": {
+     "HS": 311,
+     "HST": 311,
+     "HC": 311,
+     "HY": 311,
+     "HR": 311,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "25/07/2025",
+    "last": "24/05/2026"
+   },
+   "2627": {
+    "rows": 90,
+    "has": {
+     "HS": 90,
+     "HST": 90,
+     "HC": 90,
+     "HY": 90,
+     "HR": 90,
+     "Referee": null,
+     "HxG": 90
+    },
+    "first": "07/08/2026",
+    "last": "04/11/2026"
+   }
+  },
+  "espn": {
+   "events": 8,
+   "completed": 8,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 40,
+   "key_events": 18,
+   "past_season_events": 3,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Belgian Pro League",
+   "matches": 9,
+   "unavailable": [
+    1,
+    5
+   ]
+  }
+ },
+ "super-lig": {
+  "fd": {
+   "2122": {
+    "rows": 380,
+    "has": {
+     "HS": 380,
+     "HST": 380,
+     "HC": 380,
+     "HY": 380,
+     "HR": 380,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "13/08/2021",
+    "last": "22/05/2022"
+   },
+   "2223": {
+    "rows": 342,
+    "has": {
+     "HS": 313,
+     "HST": 313,
+     "HC": 313,
+     "HY": 313,
+     "HR": 313,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "05/08/2022",
+    "last": "07/06/2023"
+   },
+   "2324": {
+    "rows": 380,
+    "has": {
+     "HS": 379,
+     "HST": 379,
+     "HC": 379,
+     "HY": 379,
+     "HR": 379,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "11/08/2023",
+    "last": "26/05/2024"
+   },
+   "2425": {
+    "rows": 342,
+    "has": {
+     "HS": 341,
+     "HST": 341,
+     "HC": 341,
+     "HY": 341,
+     "HR": 341,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "09/08/2024",
+    "last": "01/06/2025"
+   },
+   "2526": {
+    "rows": 306,
+    "has": {
+     "HS": 306,
+     "HST": 306,
+     "HC": 306,
+     "HY": 306,
+     "HR": 306,
+     "Referee": null,
+     "HxG": null
+    },
+    "first": "08/08/2025",
+    "last": "17/05/2026"
+   },
+   "2627": {
+    "rows": 90,
+    "has": {
+     "HS": 90,
+     "HST": 90,
+     "HC": 90,
+     "HY": 90,
+     "HR": 90,
+     "Referee": null,
+     "HxG": 90
+    },
+    "first": "14/08/2026",
+    "last": "02/11/2026"
+   }
+  },
+  "espn": {
+   "events": 8,
+   "completed": 8,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 42,
+   "key_events": 18,
+   "past_season_events": 3,
+   "past_box_stats": 28
+  },
+  "fotmob": {
+   "name": "Super Lig",
+   "matches": 9,
+   "unavailable": [
+    1,
+    4
+   ]
+  }
+ },
+ "europa-league": {
+  "espn": {
+   "events": 18,
+   "completed": 18,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 42,
+   "key_events": 32,
+   "past_season_events": 0
+  },
+  "fotmob": {
+   "name": "Europa League",
+   "matches": 17,
+   "unavailable": [
+    7,
+    2
+   ]
+  }
+ },
+ "conference-league": {
+  "espn": {
+   "events": 18,
+   "completed": 18,
+   "box_stats": [
+    "redCards",
+    "shotsOnTarget",
+    "totalShots",
+    "wonCorners",
+    "yellowCards"
+   ],
+   "rosters": 42,
+   "key_events": 42,
+   "past_season_events": 0
+  },
+  "fotmob": {
+   "name": "Conference League",
+   "matches": 18,
+   "unavailable": [
+    5,
+    1
+   ]
+  }
+ },
+ "_espn_range": {
+  "dates=20261001-20261031": [
+   400,
+   0
+  ],
+  "dates=202610": [
+   200,
+   34
+  ],
+  "dates=2026&limit=1000": [
+   200,
+   297
+  ],
+  "dates=20261031&limit=200": [
+   200,
+   6
+  ]
+ }
+}
