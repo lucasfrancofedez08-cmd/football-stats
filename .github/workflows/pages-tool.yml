@@ -1,0 +1,35 @@
+name: pages-tool
+# Inspect or unstick GitHub Pages: status | cancel <sha> | build
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "status, cancel or build"
+        required: true
+        default: status
+      sha:
+        description: "deployment id or commit sha (for cancel/status)"
+        required: false
+permissions:
+  pages: write
+  actions: write
+  deployments: read
+jobs:
+  pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          R: repos/${{ github.repository }}
+        run: |
+          case "${{ inputs.action }}" in
+            status)
+              gh api "$R/pages" || true
+              gh api "$R/pages/builds/latest" || true
+              [ -n "${{ inputs.sha }}" ] && gh api "$R/pages/deployments/${{ inputs.sha }}" || true ;;
+            cancel)
+              gh api -X POST "$R/pages/deployments/${{ inputs.sha }}/cancel" ;;
+            build)
+              gh api -X POST "$R/pages/builds" ;;
+          esac
