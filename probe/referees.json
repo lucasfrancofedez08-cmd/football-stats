@@ -1,0 +1,152 @@
+{
+ "2025-10-25": {
+  "matches": 28,
+  "leagues": [
+   "bundesliga",
+   "eredivisie",
+   "la-liga",
+   "ligue-1",
+   "premier-league",
+   "primeira-liga",
+   "serie-a"
+  ],
+  "examples": [
+   {
+    "fotmob_id": 4813459,
+    "league": "premier-league",
+    "home": "Chelsea",
+    "away": "Sunderland",
+    "hg": 1,
+    "ag": 2,
+    "kickoff": "2025-10-25T14:00:00.000Z",
+    "finished": true,
+    "referee": "Andy Madley",
+    "referee_country": "England"
+   },
+   {
+    "fotmob_id": 4813463,
+    "league": "premier-league",
+    "home": "Newcastle United",
+    "away": "Fulham",
+    "hg": 2,
+    "ag": 1,
+    "kickoff": "2025-10-25T14:00:00.000Z",
+    "finished": true,
+    "referee": "Peter Bankes",
+    "referee_country": "England"
+   },
+   {
+    "fotmob_id": 4813462,
+    "league": "premier-league",
+    "home": "Manchester United",
+    "away": "Brighton & Hove Albion",
+    "hg": 4,
+    "ag": 2,
+    "kickoff": "2025-10-25T16:30:00.000Z",
+    "finished": true,
+    "referee": "Anthony Taylor",
+    "referee_country": "England"
+   }
+  ]
+ },
+ "2026-11-01": {
+  "matches": 24,
+  "leagues": [
+   "bundesliga",
+   "eredivisie",
+   "la-liga",
+   "ligue-1",
+   "premier-league",
+   "primeira-liga",
+   "serie-a"
+  ],
+  "examples": [
+   {
+    "fotmob_id": 5795501,
+    "league": "premier-league",
+    "home": "Liverpool",
+    "away": "Arsenal",
+    "hg": 0,
+    "ag": 1,
+    "kickoff": "2026-11-01T16:30:00.000Z",
+    "finished": true,
+    "referee": "Andy Madley",
+    "referee_country": "England"
+   },
+   {
+    "fotmob_id": 5881213,
+    "league": "bundesliga",
+    "home": "Union Berlin",
+    "away": "1. FC K\u00f6ln",
+    "hg": 1,
+    "ag": 1,
+    "kickoff": "2026-11-01T14:30:00.000Z",
+    "finished": true,
+    "referee": "Richard Hempel",
+    "referee_country": "Germany"
+   },
+   {
+    "fotmob_id": 5881210,
+    "league": "bundesliga",
+    "home": "Eintracht Frankfurt",
+    "away": "Hamburger SV",
+    "hg": 3,
+    "ag": 1,
+    "kickoff": "2026-11-01T16:30:00.000Z",
+    "finished": true,
+    "referee": "Florian Exner",
+    "referee_country": "Germany"
+   }
+  ]
+ },
+ "2026-11-08": {
+  "matches": 34,
+  "leagues": [
+   "bundesliga",
+   "eredivisie",
+   "la-liga",
+   "ligue-1",
+   "premier-league",
+   "primeira-liga",
+   "serie-a"
+  ],
+  "examples": [
+   {
+    "fotmob_id": 5795506,
+    "league": "premier-league",
+    "home": "Brighton & Hove Albion",
+    "away": "Brentford",
+    "hg": 0,
+    "ag": 0,
+    "kickoff": "2026-11-08T14:00:00.000Z",
+    "finished": false,
+    "referee": "Michael Oliver",
+    "referee_country": "England"
+   },
+   {
+    "fotmob_id": 5795507,
+    "league": "premier-league",
+    "home": "Crystal Palace",
+    "away": "Liverpool",
+    "hg": 0,
+    "ag": 0,
+    "kickoff": "2026-11-08T14:00:00.000Z",
+    "finished": false,
+    "referee": "Tony Harrington",
+    "referee_country": "England"
+   },
+   {
+    "fotmob_id": 5795510,
+    "league": "premier-league",
+    "home": "Ipswich Town",
+    "away": "AFC Bournemouth",
+    "hg": 0,
+    "ag": 0,
+    "kickoff": "2026-11-08T14:00:00.000Z",
+    "finished": false,
+    "referee": "Simon Hooper",
+    "referee_country": "England"
+   }
+  ]
+ }
+}
