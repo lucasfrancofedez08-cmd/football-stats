@@ -34,10 +34,21 @@ jobs:
           git commit -q -m "Data update $(date -u +%Y-%m-%dT%H:%MZ)" || echo "no changes"
           # this run's data is the newest; keep it if a concurrent commit touched the same files
           git pull -q --rebase -X theirs origin main && git push -q
-      - name: Publish website
-        uses: peaceiris/actions-gh-pages@v4
+      - name: Package website
+        uses: actions/upload-pages-artifact@v3
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
-          force_orphan: true
-          enable_jekyll: false
+          path: site
+  # Publishing is a separate job so a GitHub Pages hiccup never stops the data from being saved.
+  # Needs Settings -> Pages -> Source: "GitHub Actions".
+  publish:
+    needs: update
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
