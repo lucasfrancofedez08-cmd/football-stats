@@ -2,7 +2,7 @@
 
 Past match statistics and statistical estimates for upcoming matches in seven leagues (Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie, Primeira Liga), and the Champions, Europa and Conference League. An information tool, not betting advice: every estimate shows its inputs, its uncertainty and its track record.
 
-**Website:** https://lucasfrancofedez08-cmd.github.io/football-stats/
+**Website:** https://matchday-numbers.github.io/
 
 ## How it runs
 
