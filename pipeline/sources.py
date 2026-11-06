@@ -233,16 +233,19 @@ def fotmob_day(day):
 
 
 def fotmob_unavailable(match_id):
-    """{'home': [...], 'away': [...]} players FotMob lists as unavailable for a match."""
+    """{'home': [...], 'away': [...], 'referee': str|None} from FotMob's match page data."""
     data = fetch(f"{FOTMOB}/matchDetails?matchId={match_id}", "fotmob")
     if not data:
         return None
-    lu = (json.loads(data).get("content") or {}).get("lineup") or {}
-    out = {}
+    d = json.loads(data)
+    lu = (d.get("content") or {}).get("lineup") or {}
+    info = ((d.get("content") or {}).get("matchFacts") or {}).get("infoBox") or {}
+    out = {"referee": (info.get("Referee") or {}).get("text")}
     for side, key in (("home", "homeTeam"), ("away", "awayTeam")):
         team = lu.get(key)
         if team is None:
-            return None
+            out[side] = None
+            continue
         out[side] = [{"name": u.get("name"), "type": (u.get("unavailability") or {}).get("type"),
                       "expected_return": (u.get("unavailability") or {}).get("expectedReturn")}
                      for u in team.get("unavailable") or []]

@@ -1,0 +1,4 @@
+{
+ "_about": "Written judgement per upcoming match, keyed by ESPN match id. Shown in a separate 'Analyst view' box and never mixed into the numbers. Fields: overall, goals, corners, cards, shots, shots_on_target (one or two sentences each), sources (list of URLs), written_at (ISO time). Never use 'lock', 'sure thing' or 'guaranteed'.",
+ "matches": {}
+}

@@ -26,7 +26,8 @@ def dump(path, obj):
         json.dump(rnd(obj), f, ensure_ascii=False, separators=(",", ":"))
 
 
-def write(root, season, now, matches, events, summaries, fd, team_map, espn_teams, squad, pdir, scored, log, reports):
+def write(root, season, now, matches, events, summaries, fd, team_map, espn_teams, squad, pdir, scored, log, reports, retro=None):
+    retro = retro or {}
     out = os.path.join(root, "site", "data")
     for sub in ("team", "match"):
         for f in glob.glob(os.path.join(out, sub, "*.json")):
@@ -261,7 +262,7 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
                 "home": tid(lg, m["home"]), "away": tid(lg, m["away"]), "score": [m["hg"], m["ag"]],
                 "stats": st, "checks": m.get("checks"), "conflict_values": m.get("conflict_values"),
                 "sources": m.get("sources"), "lineups": s.get("lineups"), "goals": s.get("goals"), "cards": s.get("cards"),
-                "prediction": p,
+                "prediction": p, "retro": None if p else retro.get(m["espn_id"]),
             })
 
     # ---------------------------------------------------------------- team files
@@ -331,6 +332,23 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
                                       "gain_pct": {st: (1 - x["objective"] / x["baseline_objective"]) * 100 for st, x in v["stats"].items()}}
         if any(k in PREDICTED for k in EUROPE):
             bt["europe"] = {"matches": e["matches"], "brier": e["test"]["goals"]["brier"], "baseline_brier": e["baseline"]["goals"]["brier"]}
+    rpath = os.path.join(root, "backtest", "results_recipe.json")
+    if os.path.exists(rpath):  # the current method (60/40 recipe) replaces the earlier test results
+        with open(rpath) as f:
+            r = json.load(f)
+        bc = {k: v for k, v in r["by_comp"].items() if k in PREDICTED}
+        bt = {"season": "2025-26", "method": "recipe", "leagues": [LEAGUES[k]["name"] for k in bc], "matches": r["matches"],
+              "by_league": {k: {"matches": v["matches"], "brier_1x2": v["brier_1x2"], "baseline_brier_1x2": v["baseline_brier_1x2"],
+                                "prev_brier_1x2": v.get("prev_brier_1x2"),
+                                "gain_pct": {st: (1 - x["objective"] / x["baseline_objective"]) * 100 for st, x in v["stats"].items()},
+                                "vs_prev_pct": {st: ((x["prev_objective"] - x["objective"]) / x["prev_objective"] * 100) if x.get("prev_objective") else None
+                                                for st, x in v["stats"].items()}}
+                            for k, v in bc.items()},
+              "test": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in r["test"].items()},
+              "baseline": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in r["baseline"].items()},
+              "objective_x1000": {k: v["objective"] * 1000 for k, v in r["test"].items()},
+              "baseline_objective_x1000": {k: v["objective"] * 1000 for k, v in r["baseline"].items()},
+              "calibration": r.get("calibration", []), "tuning": r["tuning"]}
     recent = []
     for p in sorted(scored, key=lambda p: p["kickoff"], reverse=True)[:60]:
         r = p["result"]

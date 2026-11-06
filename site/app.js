@@ -214,6 +214,21 @@ function accuracyLine(acc, lg, stat) {
   if (bt) return `No live results yet. Tested on 2025-26: average miss ${fx(bt.mae, 2)}, league averages miss by ${fx(bb.mae, 2)}.`;
   return "";
 }
+function ourCall(stat, s, m) {
+  // the tightest line the numbers still back at 60% or more (the most informative one, not the safest);
+  // a close call when no line reaches 60%
+  const lines = Object.entries(s.over).map(([l, p]) => (p >= 0.5 ? [p, `over ${l}`] : [1 - p, `under ${l}`]));
+  const backed = lines.filter(x => x[0] >= 0.6).sort((a, b) => a[0] - b[0]);
+  const lab = STAT[stat].toLowerCase();
+  const best = backed[0];
+  let line = best ? `${best[1]} ${lab} (${pct(best[0])}), around ${fx(s.total)} expected` : `close call, around ${fx(s.total)} ${lab} expected (no line at 60% or more)`;
+  if (stat === "goals") {
+    const r = [[s.home_win, `${m.home.short} win`], [s.draw, "a draw"], [s.away_win, `${m.away.short} win`]].sort((a, b) => b[0] - a[0])[0];
+    line = `${r[1]} most likely (${pct(r[0])}); ${line}`;
+  }
+  return line.charAt(0).toUpperCase() + line.slice(1) + ".";
+}
+
 function statPanel(stat, P, m, acc) {
   const s = P.stats[stat];
   const res = m.prediction && m.prediction.result && m.prediction.result[stat];
@@ -227,8 +242,10 @@ function statPanel(stat, P, m, acc) {
     ${lineList(stat, s, m.prediction && m.prediction.result)}`;
   const why = `<details><summary>Why</summary><ul class="why">${(s.why || []).map(w => `<li>${h(w)}</li>`).join("")}</ul>
     <p class="small sub" style="margin-top:8px">${h(accuracyLine(acc, m.comp, stat))}</p></details>`;
-  if (stat !== "goals") return `<section class="panel">${head}${why}</section>`;
-  return `<section class="panel goals"><div>${head}${why}</div>
+  const av = P.analyst_view && !Array.isArray(P.analyst_view) ? P.analyst_view[stat] : null;
+  const verdict = `<p class="call"><b>Our call:</b> ${h(ourCall(stat, s, m))}</p>${av ? `<p class="aview"><b>Analyst view:</b> ${h(av)} <span class="sub">Opinion, not in the numbers.</span></p>` : ""}`;
+  if (stat !== "goals") return `<section class="panel">${head}${verdict}${why}</section>`;
+  return `<section class="panel goals"><div>${head}${verdict}${why}</div>
     <div><h3>Score</h3>
       <p class="small" style="margin:0 0 4px">Both teams score: <b>${pct(s.btts)}</b>. Clean sheet: ${h(m.home.short)} <b>${pct(s.clean_sheet_home)}</b>, ${h(m.away.short)} <b>${pct(s.clean_sheet_away)}</b>.</p>
       <p class="small sub" style="margin:10px 0 0">Most likely scores</p>
@@ -236,7 +253,54 @@ function statPanel(stat, P, m, acc) {
     </div></section>`;
 }
 
+const ADJ_ROWS = [["momentum", "Momentum (last 6 games)"], ["h2h", "Head-to-head (minor)"], ["missing", "Missing players"],
+  ["referee", "Referee"], ["congestion", "Fixture congestion"], ["derby", "Derby"], ["stakes", "High stakes"]];
+function recipeSection(P, m) {
+  const R = P.recipe;
+  const rows = Object.keys(STAT).map(k => {
+    const s = P.stats[k];
+    return `<tr><td>${STAT[k]}</td><td class="n">${fx(s.base_home + s.base_away)}</td><td class="n">${fx(s.adj_home + s.adj_away)}</td><td class="n final">${fx(s.total)}</td></tr>`;
+  }).join("");
+  const nm = k => (k === P.home ? m.home.short : k === P.away ? m.away.short : k);
+  const meet = (P.h2h || []).map(x => `<li>${h(day(x.date))}: ${h(nm(x.home))} ${x.score[0]}–${x.score[1]} ${h(nm(x.away))}</li>`).join("");
+  const eu = EUROPE.has(m.comp);
+  return `<section class="section"><h2>How the numbers were built</h2>
+    <div class="split" aria-label="Weights"><span class="b" style="flex:${R.base_weight}">Base ${pct(R.base_weight)}</span><span class="v1" style="flex:${R.adj_weight}">Adjustments ${pct(R.adj_weight)}</span></div>
+    <p class="sub small">Base: ${h(m.home.short)}'s home numbers against ${h(m.away.short)}'s away numbers, adjusted for the strength of the opponents each has faced and measured against the ${eu ? "competition" : "league"} average. Recent games count more.${eu ? " For European games, every league and European match of the last three seasons puts clubs from different leagues on one scale." : ""} Adjustments: the same base after momentum, head-to-head (minor), missing players, referee, fixture congestion and derby or high stakes. Final = 60% base + 40% adjusted.</p>
+    <div class="tscroll build"><table><thead><tr><th>Total, both teams</th><th class="n">Base</th><th class="n">After adjustments</th><th class="n">Final (60/40)</th></tr></thead><tbody>${rows}</tbody></table></div>
+    ${meet ? `<p class="small" style="margin-top:12px">Last ${(P.h2h || []).length} meetings (a minor factor):</p><ul class="h2h">${meet}</ul>` : `<p class="small sub" style="margin-top:12px">No meetings in the last three seasons.</p>`}</section>`;
+}
+function recipeAdjustments(P, m) {
+  const adjs = P.adjustments || [];
+  const cell = (kind, side, stat) => {
+    const xs = adjs.filter(a => a.kind === kind && a.stat === stat && (side === "both" || a.side === side || a.side === "both"));
+    if (!xs.length) return `<td class="n sub">·</td>`;
+    const v = xs.reduce((t, a) => t + a.effect_pct, 0);
+    return `<td class="n ${v > 0.05 ? "up" : v < -0.05 ? "down" : ""}">${v > 0 ? "+" : ""}${fx(v, 1)}%</td>`;
+  };
+  const rows = [];
+  ADJ_ROWS.forEach(([k, label]) => {
+    if (!adjs.some(a => a.kind === k)) return;
+    const sided = ["momentum", "h2h", "missing", "congestion"].includes(k);
+    const sides = sided ? [["home", m.home.short], ["away", m.away.short]] : [["both", "both teams"]];
+    sides.forEach(([sd, who]) => {
+      if (sided && !adjs.some(a => a.kind === k && a.side === sd)) return;
+      rows.push(`<tr><td>${h(label)}<span class="sub">, ${h(who)}</span></td>${Object.keys(STAT).map(st => cell(k, sd, st)).join("")}</tr>`);
+    });
+  });
+  const statusLabel = { measured: "measured", rule: "rule", info: "context only" };
+  const notes = adjs.filter(a => !["momentum", "h2h"].includes(a.kind));
+  const seen = new Set();
+  const uniq = notes.filter(a => { const k = a.kind + a.detail; if (seen.has(k)) return false; seen.add(k); return true; });
+  return `<section class="section"><h2>Adjustments</h2>
+    <p class="sub small">Effect of each adjustment on the final number. Adjustments carry 40% of the weight.</p>
+    <div class="tscroll"><table class="adjm"><thead><tr><th></th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>
+    ${uniq.length ? `<ul class="adj" style="margin-top:12px">${uniq.map(a => `<li><span class="eff ${a.effect_pct > 0 ? "up" : a.effect_pct < 0 ? "down" : ""}">${a.effect_pct > 0 ? "+" : ""}${fx(a.effect_pct, 1)}%</span><span>${h(STAT[a.stat] || a.stat)}: ${h(a.detail)}</span><span class="pill ${a.status === "info" ? "info" : ""}" title="${a.status === "info" ? "Shown for context; not used in the numbers" : a.status === "rule" ? "Used in the numbers; size set by a fixed rule" : "Used in the numbers; size measured on past seasons"}">${h(statusLabel[a.status] || a.status)}</span></li>`).join("")}</ul>` : ""}
+    <details><summary>Momentum details</summary><ul class="why">${adjs.filter(a => a.kind === "momentum" && a.stat === "goals").map(a => `<li>${h(a.detail)}</li>`).join("")}</ul></details></section>`;
+}
+
 function buildSection(P, m) {
+  if (P.recipe) return recipeSection(P, m);
   const B = P.blend;
   if (!B || B.views_weight == null || !P.stats.goals.views) return "";
   const eu = EUROPE.has(m.comp);
@@ -276,10 +340,13 @@ function predictionCard(m, acc, teams) {
   const effCls = v => (v > 0 ? "up" : v < 0 ? "down" : "");
   const away = daysTo(m.kickoff);
   const facts = [
-    EUROPE.has(m.comp)
-      ? `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>games behind the ratings, all competitions</span>`
-      : `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>league games behind it${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}</span>`,
+    P.recipe
+      ? `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>${h(m.home.short)} home + ${h(m.away.short)} away games behind the base</span>`
+      : EUROPE.has(m.comp)
+        ? `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>games behind the ratings, all competitions</span>`
+        : `<span class="fact"><b>${P.sample.home_games} + ${P.sample.away_games}</b>league games behind it${P.sample.home_games < 10 || P.sample.away_games < 10 ? ", blended with last season" : ""}</span>`,
     `<span class="fact"><b>${pr.team_news ? "Included" : "Not yet"}</b>team news${pr.team_news ? "" : " (arrives 4 days before)"}</span>`,
+    P.recipe ? `<span class="fact"><b>${h(pr.referee || "Not yet")}</b>referee${pr.referee ? "" : " (announced a few days before)"}</span>` : "",
     m.status === "upcoming" && away > 7 ? `<span class="fact"><b>${Math.round(away)} days</b>to kick-off: early estimate</span>` : "",
     `<span class="fact"><b>${m.status === "upcoming" ? h(ago(pr.made_at)) : "Frozen"}</b>${m.status === "upcoming" ? "last update, frozen at kick-off" : `last update ${h(kick(pr.made_at))}`}</span>`,
   ].join("");
@@ -290,12 +357,22 @@ function predictionCard(m, acc, teams) {
     <section class="section"><h2>Expected numbers</h2>
     <div class="grid">${Object.keys(STAT).map(s => statPanel(s, P, m, acc)).join("")}</div></section>
     ${buildSection(P, m)}
-    <section class="section"><h2>Adjustments</h2>
-    ${adjs.length ? `<ul class="adj">${adjs.map(a => `<li><span class="eff ${effCls(a.effect_pct)}">${a.effect_pct > 0 ? "+" : ""}${fx(a.effect_pct, 1)}%</span><span>${h(STAT[a.stat] || a.stat)}, ${h(a.side === "both" ? "both teams" : a.side === "home" ? m.home.short : m.away.short)}: ${h(a.detail)}</span><span class="pill ${h(a.status)}" title="${a.status === "info" ? "Shown for context; not used in the numbers" : a.status === "provisional" ? "Used in the numbers; size not yet calibrated on data" : "Used in the numbers; size measured on past seasons"}">${h(statusLabel[a.status] || a.status)}</span></li>`).join("")}</ul>` : `<p class="empty">No adjustments for this match.</p>`}</section>
+    ${P.recipe ? recipeAdjustments(P, m) : `<section class="section"><h2>Adjustments</h2>
+    ${adjs.length ? `<ul class="adj">${adjs.map(a => `<li><span class="eff ${effCls(a.effect_pct)}">${a.effect_pct > 0 ? "+" : ""}${fx(a.effect_pct, 1)}%</span><span>${h(STAT[a.stat] || a.stat)}, ${h(a.side === "both" ? "both teams" : a.side === "home" ? m.home.short : m.away.short)}: ${h(a.detail)}</span><span class="pill ${h(a.status)}" title="${a.status === "info" ? "Shown for context; not used in the numbers" : a.status === "provisional" ? "Used in the numbers; size not yet calibrated on data" : "Used in the numbers; size measured on past seasons"}">${h(statusLabel[a.status] || a.status)}</span></li>`).join("")}</ul>` : `<p class="empty">No adjustments for this match.</p>`}</section>`}
     <section class="section"><h2>Missing players</h2>
-    ${out.length || dbt.length ? `<ul class="adj">${out.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}</span><span class="pill provisional" title="Counted in the numbers">out</span></li>`).join("")}${dbt.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}</span><span class="pill info" title="Not counted in the numbers">may play</span></li>`).join("")}</ul>` : `<p class="empty">${pr.team_news ? "No injuries or suspensions reported." : "No team news yet."}</p>`}
+    ${out.length || dbt.length ? `<ul class="adj">${out.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}${x.share ? `, ${pct(x.share)} of team goal involvement` : ""}</span><span class="pill provisional" title="Counted in the numbers">out</span></li>`).join("")}${dbt.map(x => `<li><span class="eff">${h(x.team)}</span><span>${h(x.name)}: ${h(x.reason)}</span><span class="pill info" title="Not counted in the numbers">may play</span></li>`).join("")}</ul>` : `<p class="empty">${pr.team_news ? "No injuries or suspensions reported." : "No team news yet."}</p>`}
     <p class="note" style="margin-top:12px">${pr.team_news ? "Team news comes from FotMob in the last 4 days before kick-off and is refreshed every 3 hours. It can still change before the match." : "Team news appears 4 days before kick-off. Until then, only suspensions worked out from cards are counted, and they may miss appeals or cup bans."}</p></section>
-    ${(P.analyst_view || []).length ? `<section class="section"><h2>Analyst view</h2><div class="panel">${P.analyst_view.map(x => `<p>${h(x)}</p>`).join("")}<p class="sub small">Opinion, not part of the numbers above.</p></div></section>` : ""}`;
+    ${analystBox(P.analyst_view)}`;
+}
+
+function analystBox(av) {
+  if (!av) return "";
+  const paras = Array.isArray(av) ? av : [av.overall].filter(Boolean);
+  if (!paras.length) return "";
+  const src = !Array.isArray(av) && av.sources ? av.sources : [];
+  return `<section class="section"><h2>Analyst view</h2><div class="panel">${paras.map(x => `<p>${h(x)}</p>`).join("")}
+    ${src.length ? `<p class="sub small">Read before writing: ${src.map(u => { try { return `<a href="${h(u)}" rel="noopener">${h(new URL(u).hostname.replace("www.", ""))}</a>`; } catch (e) { return ""; } }).join(", ")}</p>` : ""}
+    <p class="sub small">Opinion${!Array.isArray(av) && av.written_at ? `, written ${h(ago(av.written_at))}` : ""}. It is kept separate and never changes the numbers above.</p></div></section>`;
 }
 
 function compareSection(m, teams) {
@@ -341,6 +418,22 @@ function cmpRow(label, a, b, colors, check, conflict) {
     <span class="v r">${b ?? "–"}</span></li>`;
 }
 
+function modelCheck(m) {
+  const R = m.retro, S = m.stats;
+  const actual = { goals: S.goals, corners: S.corners, cards: S.cards, shots: S.shots, shots_on_target: S.shots_on_target };
+  const g = R.goals, res = m.score[0] > m.score[1] ? "home_win" : m.score[0] < m.score[1] ? "away_win" : "draw";
+  return `<section class="section"><h2>Model check</h2>
+    <p>What the numbers would have said before kick-off: ${h(m.home.short)} ${pct(g.home_win)}, draw ${pct(g.draw)}, ${h(m.away.short)} ${pct(g.away_win)}. The actual result had a ${pct(g[res])} chance.</p>
+    <div class="tscroll"><table><thead><tr><th>Stat</th><th class="n">Expected</th><th class="n">Likely range</th><th class="n">Actual</th><th class="n">Off by</th></tr></thead><tbody>
+    ${Object.keys(STAT).map(k => {
+      const e = R.stats[k], a = actual[k];
+      const tot = a && a[0] != null && a[1] != null ? a[0] + a[1] : null;
+      const inr = tot != null && tot >= e.range[0] && tot <= e.range[1];
+      return `<tr><td>${STAT[k]}</td><td class="n">${fx(e.total)}</td><td class="n">${e.range[0]}–${e.range[1]}</td><td class="n">${tot ?? "–"}</td><td class="n ${tot == null ? "" : inr ? "up" : "down"}">${tot == null ? "–" : sgn(tot - e.total, 1)}</td></tr>`;
+    }).join("")}</tbody></table></div>
+    <p class="sub small" style="margin-top:8px">Worked out after the match, using the current method and only games played before the week of the match. This is not a frozen estimate and doesn't count toward the track record.</p></section>`;
+}
+
 async function renderMatch(id) {
   const [m, acc] = await Promise.all([get(`match/${id}.json`), get("accuracy.json").catch(() => null)]);
   const teams = await Promise.all([m.home.slug, m.away.slug].map(sl => get(`team/${sl}.json`).catch(() => null)));
@@ -382,7 +475,7 @@ async function renderMatch(id) {
       }).join("")}</tbody></table></div>
       <details><summary>Full estimate as it was frozen</summary>${predictionCard({ ...m, status: "finished" }, acc)}</details></section>`;
   } else if (!EUROPE.has(m.comp)) {
-    body += `<p class="note section">No frozen estimate for this match: it was played before estimates started on this site.</p>`;
+    body += m.retro ? modelCheck(m) : `<p class="note section">No frozen estimate for this match: it was played before estimates started on this site.</p>`;
   }
   if (m.lineups && m.lineups.home) {
     const lu = side => {
@@ -519,24 +612,33 @@ async function renderAccuracy() {
     const mo = bt.objective_x1000 || {}, bo = bt.baseline_objective_x1000 || {}, po = bt.pure_objective_x1000 || {};
     const better = Object.keys(po).filter(k => mo[k] < po[k]).map(k => STAT[k].toLowerCase());
     const worse = Object.keys(po).filter(k => mo[k] > po[k]).map(k => STAT[k].toLowerCase());
+    const rc = bt.method === "recipe";
+    const T = bt.tuning || {};
     body += `<section class="section"><h2>Tested on last season</h2>
-      <p>Tuned on 2023-24 and 2024-25, then run once over all ${bt.matches} matches of 2025-26 in ${h((bt.leagues || []).join(", "))}, each estimated using only games played before it. This is a test, not a live record.</p>
-      <p>Win/draw/loss Brier score <b>${fx(g.brier, 3)}</b> vs ${fx(gb.brier, 3)} for league averages, ${fx((1 - g.brier / gb.brier) * 100, 1)}% better.</p>
-      ${bt.europe ? `<p>European competitions were tested the same way: tuned on 2024-25, then run once over ${bt.europe.matches} Champions, Europa and Conference League matches of 2025-26. Win/draw/loss Brier score <b>${fx(bt.europe.brier, 3)}</b> vs ${fx(bt.europe.baseline_brier, 3)} for the plain European average, ${fx((1 - bt.europe.brier / bt.europe.baseline_brier) * 100, 1)}% better.</p>` : ""}
-      ${Object.keys(mo).length ? duel(mo, bo) : ""}
+      <p>${rc ? `The current method (60% base, 40% adjustments) was tuned on 2024-25, then run once over all ${bt.matches} matches of 2025-26 in ${h((bt.leagues || []).join(", "))}. Each match was estimated using only games played before its week.` : `Tuned on 2023-24 and 2024-25, then run once over all ${bt.matches} matches of 2025-26 in ${h((bt.leagues || []).join(", "))}, each estimated using only games played before it.`} This is a test, not a live record.</p>
+      <p>Win/draw/loss Brier score <b>${fx(g.brier, 3)}</b> vs ${fx(gb.brier, 3)} for plain averages, ${fx((1 - g.brier / gb.brier) * 100, 1)}% better.</p>
+      ${!rc && bt.europe ? `<p>European competitions were tested the same way: tuned on 2024-25, then run once over ${bt.europe.matches} Champions, Europa and Conference League matches of 2025-26. Win/draw/loss Brier score <b>${fx(bt.europe.brier, 3)}</b> vs ${fx(bt.europe.baseline_brier, 3)} for the plain European average, ${fx((1 - bt.europe.brier / bt.europe.baseline_brier) * 100, 1)}% better.</p>` : ""}
+      ${Object.keys(mo).length ? duel(mo, bo, "plain averages") : ""}
       ${Object.keys(po).length ? `<h3 style="margin-top:22px">The 60/40 mix vs statistics alone</h3>
         <p class="small">Estimates use 60% past statistics and 40% form, team gap and head-to-head. On the test season, the mix compared with statistics alone like this (log loss, lower is better):</p>
         <div class="tscroll"><table><thead><tr><th>Stat</th><th class="n">60/40 mix</th><th class="n">Statistics alone</th><th class="n">Difference</th></tr></thead><tbody>
         ${Object.keys(STAT).map(s => po[s] != null ? `<tr><td>${STAT[s]}</td><td class="n">${fx(mo[s] / 1000, 4)}</td><td class="n">${fx(po[s] / 1000, 4)}</td><td class="n">${sgn((mo[s] - po[s]) / po[s] * 100, 2)}%</td></tr>` : "").join("")}
         </tbody></table></div><p class="sub small" style="margin-top:6px">Almost a tie. The mix is slightly better on ${h(better.join(", ") || "nothing")}${worse.length ? ` and slightly worse on ${h(worse.join(", "))}` : ""}.</p>` : ""}
       ${bt.by_league ? `<h3 style="margin-top:22px">Competition by competition</h3>
-        <p class="small">How much smaller the model's error is than the plain average, for each competition and stat (log loss; higher is better, below zero means the average did better). For European competitions the comparison is the European average.</p>
-        <div class="tscroll"><table class="heat"><thead><tr><th>League</th><th class="n">Matches</th><th class="n">Win/draw/loss</th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>
+        <p class="small">How much smaller the error is than the plain average, for each competition and stat (log loss; higher is better, below zero means the average did better). For European competitions the comparison is the European average.</p>
+        <div class="tscroll"><table class="heat"><thead><tr><th>Competition</th><th class="n">Matches</th><th class="n">Win/draw/loss</th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>
         ${Object.entries(bt.by_league).map(([k, v]) => `<tr><td>${h(LEAGUES[k] || k)}</td><td class="n">${v.matches}</td><td class="n ${heat((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100)}">${sgn((1 - v.brier_1x2 / v.baseline_brier_1x2) * 100, 1)}%</td>${Object.keys(STAT).map(st => `<td class="n ${heat(v.gain_pct[st])}">${sgn(v.gain_pct[st], 1)}%</td>`).join("")}</tr>`).join("")}
-        </tbody></table></div>` : ""}
+        </tbody></table></div>
+        ${rc ? `<h3 style="margin-top:22px">Current method vs the previous one</h3>
+        <p class="small">Change in error compared with the method used before (positive means the current method is more accurate).</p>
+        <div class="tscroll"><table class="heat"><thead><tr><th>Competition</th><th class="n">Win/draw/loss</th>${Object.keys(STAT).map(k => `<th class="n">${STAT[k]}</th>`).join("")}</tr></thead><tbody>
+        ${Object.entries(bt.by_league).map(([k, v]) => { const w = v.prev_brier_1x2 ? (v.prev_brier_1x2 - v.brier_1x2) / v.prev_brier_1x2 * 100 : null; return `<tr><td>${h(LEAGUES[k] || k)}</td><td class="n ${heat(w)}">${w == null ? "–" : sgn(w, 1) + "%"}</td>${Object.keys(STAT).map(st => { const x = v.vs_prev_pct && v.vs_prev_pct[st]; return `<td class="n ${heat(x)}">${x == null ? "–" : sgn(x, 1) + "%"}</td>`; }).join("")}</tr>`; }).join("")}
+        </tbody></table></div>` : ""}` : ""}
       <h3 style="margin-top:22px">Lines in detail</h3>${statTable(bt.test, bt.baseline)}
       <h3 style="margin-top:22px">Calibration in testing</h3>${calibSvg(bt.calibration)}
-      <p class="sub small">Referee history didn't improve accuracy in testing, so it's shown on cards for context only. Derby matches had ${fx((bt.tuning.derby_cards - 1) * 100, 0)}% more cards than expected across the seven leagues, so that adjustment is applied.</p></section>`;
+      <p class="sub small">${rc
+        ? `Measured on 2024-25 and used as adjustment sizes: derbies ${sgn((T.derby_cards || 0) * 100, 0)}% cards, high-stakes matches ${sgn((T.stakes_cards || 0) * 100, 0)}% cards, short rest or a European game midweek ${sgn((T.congestion_goals || 0) * 100, 0)}% goals for that team. A size of 0 means the effect was too small or too rare to apply. A referee's record is blended with ${fx(T.referee_k || 0, 0)} games at the average, so it takes a long record to move the number much. Recent form was weighed the same way and turned out to add little beyond the base, so momentum adjustments are usually small.`
+        : `Referee history didn't improve accuracy in testing, so it's shown on cards for context only. Derby matches had ${fx((T.derby_cards - 1) * 100, 0)}% more cards than expected across the seven leagues, so that adjustment is applied.`}</p></section>`;
   }
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>Track record</h1>
     <p class="sub" style="margin-top:8px;max-width:64ch">Every estimate is frozen at kick-off and compared with what happened, misses included. A good model should beat plain league averages, and its 70% calls should come true about 70% of the time.</p></div></section>${wrap(body)}`;
@@ -549,23 +651,29 @@ function renderAbout() {
   app.innerHTML = `<section class="hero turf"><div class="wrap"><h1>How it works</h1></div></section>${wrap(`<div class="prose">
   <p>Matchday Numbers shows past statistics and statistical estimates for every match in the next month in the Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Eredivisie and Primeira Liga, plus full stats for the Champions League, Europa League and Conference League. It's an information tool: every estimate shows its inputs, its uncertainty and its track record, so you can decide how much to trust it.</p>
   <h2>Where the data comes from</h2>
-  <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for all seven leagues, and referees for the Premier League.</li>
-  <li><b>ESPN</b>: fixtures, kick-off times, European competition matches, lineups, goals, assists and minutes.</li>
-  <li><b>FotMob</b>: team news (injured and suspended players) for the next few days' matches.</li></ul>
+  <ul><li><b>football-data.co.uk</b>: results, shots, corners and cards for all seven leagues.</li>
+  <li><b>ESPN</b>: fixtures, kick-off times, European competition matches, every club's games in all competitions, lineups, goals, assists and minutes.</li>
+  <li><b>FotMob</b>: team news (injured and suspended players) and referees, for every competition.</li></ul>
   <p>The ESPN and FotMob feeds are public but unofficial, so they can change without notice. Where football-data.co.uk and ESPN both cover a match, they're compared stat by stat; if they disagree by more than a corner or card (two shots), that stat is shown with both values and left out of the model for that match. Data refreshes every three hours.</p>
-  <h2>The model, in plain words</h2>
-  <ol><li><b>Past statistics (60%).</b> For each stat, start from the league average for home or away teams, then multiply by the home side's attacking strength and the away side's defensive weakness, and the other way round. The last 6 games count double. With few games, numbers lean toward last season's level, or a typical promoted team's. Goals also borrow from shots on target, which measure the same thing with less luck.</li>
-  <li><b>Form, team gap and head-to-head (40%).</b> Form looks only at the last 5 games. Team gap turns the difference in points per game into more or fewer goals, corners, shots and cards, using effects measured on past seasons. Head-to-head uses up to 6 past meetings. Each view leans back toward the statistics when it has little evidence.</li>
-  <li><b>Adjustments</b>, each listed on the card with its effect: derby matches (more cards, measured on past seasons), missing players (provisional: a team's expected goals drop by 40% of the player's share of its goals and assists, and a missing regular keeper or defender adds 3% to the opponent), and short rest (provisional). Referee history is shown for context only.</li>
-  <li><b>Probabilities.</b> Goals use a Dixon-Coles model to get win/draw/loss, likely scores and over/under chances. Corners, cards and shots use a negative binomial distribution, which allows for more spread than a simple average suggests.</li></ol>
-  <h2>European competitions</h2>
-  <p>Champions, Europa and Conference League matches use the same 60/40 split, with a different base. Clubs come from different leagues, so their season numbers can't be compared directly. Instead, one rating model is fitted on every game available: all seven leagues above, the league and qualifying games of every club playing in Europe (from ESPN), and the European matches themselves. Each club's rating leans toward its league's level, and European results decide how strong each league is. Older games count less. The 40% adds form over the last 5 games in any competition, the strength gap between the teams (effects measured on past European games), and past meetings.</p>
-  <p>There's no High/Medium/Low confidence label. An earlier version had one, but on two past seasons it didn't predict which estimates turned out more accurate, so it was removed. Each estimate instead shows the plain facts: how many games it rests on, whether team news is included, and how far away kick-off is. The uncertainty itself is already in the percentages and likely ranges.</p>
+  <h2>The method, in plain words</h2>
+  <p>Every match, league or European, gets the same recipe: <b>final = 60% base + 40% adjusted</b>.</p>
+  <ol><li><b>Base (60%).</b> The home team's home numbers against the away team's away numbers, for each stat. Each team's numbers are adjusted for the strength of the opponents it faced and measured against the league average, and recent games count more (older games fade out). Teams with few games lean toward their league's level; promoted teams start from the level of past promoted teams. How far a team may sit from its league's level was measured per stat: team differences are real for goals, but much smaller than raw averages suggest for corners and shots, so those lean harder toward the league average. For European games, every league and European match of the last three seasons puts clubs from different leagues on one scale.</li>
+  <li><b>Adjustments (40%).</b> The same base, changed by:
+    <ul><li>Momentum: each team's last 6 games in any competition, against what was expected of them. Tested on 2024-25, recent form added little beyond the base (which already weights recent games more), so its measured size is small.</li>
+    <li>Head-to-head: past meetings, as a minor factor.</li>
+    <li>Missing key players: a team's expected goals drop by the missing player's share of its goals and assists. With the 40% weight, that means a replacement covers 60% of his output. A missing regular goalkeeper or defender adds a little to the opponent.</li>
+    <li>Referee, for cards: his cards per game against the average, pulled toward the average when he has few games.</li>
+    <li>Fixture congestion: fewer than 4 days' rest or a European game midweek.</li>
+    <li>Derby or high stakes (late-season top or bottom clashes, European knockouts), for cards.</li></ul>
+    Every adjustment is listed on the match page with its effect on the final number. All sizes were measured on 2024-25; one that made no measurable difference (congestion, stakes) is shown for information with a size of 0.</li>
+  <li><b>Probabilities.</b> Goals use a Dixon-Coles model for win/draw/loss, likely scores and over/under. Corners, cards and shots use a negative binomial distribution, which allows for more spread than a simple average suggests.</li>
+  <li><b>Our call and analyst view.</b> Each stat ends with "our call": the tightest line the numbers still give 60% or more, or "close call" when none does. Where available, an analyst view adds judgement from recent news, such as rotation, motivation or a new manager. It's written separately and never changes the numbers.</li></ol>
+  <p>Finished matches from before estimates started show a "model check": what the method would have said using only earlier games. It's labelled as such and isn't part of the track record.</p>
   <h2>What it can't do</h2>
   <ul><li>Team news is only as good as FotMob's reports, and doubtful players aren't counted.</li>
   <li>European estimates are less certain for clubs from small leagues: their ratings rest on fewer games, and the strength of their league is judged mostly from European results.</li>
   <li>Suspensions worked out from cards use La Liga's rule (a ban every 5th yellow) for every league except the Premier League, so they're approximate. FotMob's team news replaces them in the last 4 days.</li>
-  <li>Corners and cards are hard to predict for anyone. The model beats league averages on them, but only slightly.</li>
+  <li>Corners are hard to predict for anyone: in testing the estimates were about as good as the league average, a little better in some competitions and a little worse in others. Cards and shots beat the average in most competitions, but only slightly. Each match page says when a stat didn't beat the average in that competition.</li>
   <li>Analyst views (new manager, motivation) are kept in a separate box and never mixed into the numbers.</li></ul>
   <p>Every estimate is saved in the project's public history before kick-off, so the track record can't be edited after the fact.</p></div>`)}`;
 }

@@ -17,14 +17,14 @@ from datetime import date, datetime, timedelta
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from model.data import load_file  # noqa: E402
-from model.predict import Predictor  # noqa: E402
+from model.adjustments import is_derby  # noqa: E402
 from pipeline import merge, players, predictions, site_data, sources, teams  # noqa: E402
 
-try:  # the European model needs numpy/scipy; league estimates must publish even without it
-    from pipeline import europe  # noqa: E402
+try:  # the estimate engine needs numpy/scipy; stats must still publish without it
+    from pipeline import engine, europe  # noqa: E402
 except Exception as _ex:  # pragma: no cover
-    europe = None
-    _EUROPE_IMPORT_ERROR = repr(_ex)
+    engine = europe = None
+    _ENGINE_IMPORT_ERROR = repr(_ex)
 from pipeline.sources import DOMESTIC, EUROPE, LEAGUES, PREDICTED  # noqa: E402
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -313,122 +313,125 @@ def main():
     for lg in LEAGUES:
         squad[lg] = players.season_players(matches[lg], summaries[lg], lambda m, side: m[side])
 
-    # ------------------------------------------------------------ 7. predictions (freeze at kick-off)
+    # ------------------------------------------------------------ 7. estimates: one 60/40 recipe for every competition
     version = model_version()
     pdir = os.path.join(DATA, "predictions", season)
     overrides = jload(os.path.join(DATA, "overrides", "injuries.json"), {})
+    analyst = jload(os.path.join(DATA, "overrides", "analyst.json"), {}).get("matches", {})
     upcoming = [e for lg in PREDICTED for e in events[lg].values()
                 if e.get("status") == "pre" and now < datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00")) < now + timedelta(days=4)]
     league_of = {e["espn_id"]: lg for lg in LEAGUES for e in events[lg].values()}
     fm_ids = fotmob_ids(os.path.join(sdir, "fotmob_ids.json"), upcoming, league_of, now)
+    ref_path = os.path.join(sdir, "referees_live.json")
+    live_refs = jload(ref_path, {})
     made = frozen = 0
-    for lg in [x for x in PREDICTED if x in DOMESTIC]:
-        made_lg = made
-        prev = history_seasons(lg, season)
-        predictor = Predictor(lg, prev)
-        fe = fd_of_espn[lg]
-        for e in events[lg].values():
-            path = os.path.join(pdir, lg, f"{e['espn_id']}.json")
-            ko = datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00"))
-            if e.get("status") != "pre" or ko <= now:
-                frozen += os.path.exists(path)
-                continue  # kicked off (or postponed and not rescheduled): never rewritten
-            if ko - now > timedelta(days=UPCOMING_DAYS):
-                continue
-            home, away = fe.get(e["home"]["espn_id"]), fe.get(e["away"]["espn_id"])
-            if not home or not away:
-                log["errors"].append(f"{lg} {e['espn_id']}: unmapped team, no prediction")
-                continue
-            cur = [m for m in matches[lg] if m["date"] < e["kickoff"][:10]]
-            ctx = {"referee": referees.get((e["kickoff"][:10], home, away))
-                   or referees.get(((ko - timedelta(days=1)).date().isoformat(), home, away))}
-            news = None
-            if ko - now < timedelta(days=4) and e["espn_id"] in fm_ids:
-                news = sources.fotmob_unavailable(fm_ids[e["espn_id"]])
-            known = True
-            for side, team in (("home", home), ("away", away)):
-                ctx[f"{side}_label"] = (team_map[lg].get(team) or {}).get("name") or team
-                sq = squad[lg].get(team, {})
-                ctx[f"{side}_squad"] = sq
-                ov = (overrides.get("teams", {}).get(lg, {}) or {}).get(team)
-                out, doubtful, ok = team_news(news[side] if news else None, sq, ov, today)
-                if not ok:  # no team news: fall back to suspensions worked out from cards
-                    out = players.likely_suspended(lg, team, sq, cur) if sq else []
-                known = known and ok
-                ctx[f"{side}_missing"] = out
-                ctx[f"{side}_doubtful"] = doubtful
-                if ko - now < timedelta(days=3):
-                    last = sources.espn_team_last_match(e[side]["espn_id"], e["kickoff"])
-                    if last:
-                        lko = datetime.fromisoformat(last[0].replace("Z", "+00:00"))
-                        ctx[f"{side}_rest_days"] = (ko.date() - lko.date()).days
-                        ctx[f"{side}_europe_midweek"] = "UEFA" in last[1] and (ko - lko).days <= 5
-            ctx["injuries_known"] = known
-            try:
-                p = predictions.make(predictor, e, home, away, cur, ctx, now.isoformat(), version)
-                jsave(path, p)
-                made += 1
-            except Exception as ex:  # one bad fixture must not stop the run
-                log["errors"].append(f"prediction {lg} {e['espn_id']}: {ex!r}")
-                traceback.print_exc()
-        log["leagues"][lg]["predictions"] = made - made_lg
-    # ------------------------------------------------------------ 7b. European competitions (cross-league model)
-    eu_pred = [lg for lg in EUROPE if lg in PREDICTED]
-    ep = None
-    if eu_pred and europe is None:
-        log["errors"].append(f"european model unavailable: {_EUROPE_IMPORT_ERROR}")
-    elif eu_pred:
+    rec = None
+    if engine is None:
+        log["errors"].append(f"estimate engine unavailable: {_ENGINE_IMPORT_ERROR}")
+    else:
         try:
-            ep, _ = europe.build(season, now, fd, matches, events, team_map, sdir, log, jload, jsave)
-        except Exception as ex:  # the league estimates must still publish
-            log["errors"].append(f"european model: {ex!r}")
+            ref_rows = []
+            for eid, r in live_refs.items():
+                lg = league_of.get(eid)
+                e = events.get(lg, {}).get(eid) if lg else None
+                if e and e.get("completed"):
+                    ref_rows.append({"league": lg, "kickoff": e["kickoff"], "home": e["home"]["name"], "away": e["away"]["name"],
+                                     "hg": e.get("hg"), "ag": e.get("ag"), "referee": r["referee"]})
+            rec = engine.build(season, now, fd, matches, events, team_map, sdir, log, jload, jsave, ref_rows)
+        except Exception as ex:  # nothing new is published, frozen estimates stay as they are
+            log["errors"].append(f"estimate engine: {ex!r}")
             traceback.print_exc()
-    if ep:
+    if rec:
         dom_of = {t["espn_id"]: (dl, n) for dl in DOMESTIC for n, t in (team_map.get(dl) or {}).items()}
-        for lg in eu_pred:
+        tables = {lg: engine.league_table([m for m in matches[lg]]) for lg in DOMESTIC}
+        for lg in PREDICTED:
             made_lg = made
+            fe = fd_of_espn.get(lg, {})
             for e in events[lg].values():
                 path = os.path.join(pdir, lg, f"{e['espn_id']}.json")
                 ko = datetime.fromisoformat(e["kickoff"].replace("Z", "+00:00"))
                 if e.get("status") != "pre" or ko <= now:
                     frozen += os.path.exists(path)
-                    continue
+                    continue  # kicked off (or postponed and not rescheduled): never rewritten
                 if ko - now > timedelta(days=UPCOMING_DAYS):
                     continue
                 if not e["home"].get("espn_id") or not e["away"].get("espn_id"):
                     continue  # knockout slot whose teams aren't known yet
-                ctx, known = {}, True
-                news = sources.fotmob_unavailable(fm_ids[e["espn_id"]]) if ko - now < timedelta(days=4) and e["espn_id"] in fm_ids else None
-                for side in ("home", "away"):
+                if lg in DOMESTIC:
+                    hf, af = fe.get(e["home"]["espn_id"]), fe.get(e["away"]["espn_id"])
+                    if not hf or not af:
+                        log["errors"].append(f"{lg} {e['espn_id']}: unmapped team, no estimate")
+                        continue
+                else:
+                    hf, af = e["home"]["espn_id"], e["away"]["espn_id"]
+                news = None
+                if ko - now < timedelta(days=4) and e["espn_id"] in fm_ids:
+                    news = sources.fotmob_unavailable(fm_ids[e["espn_id"]])
+                info, known = {}, True
+                if news and news.get("referee"):
+                    info["referee"] = news["referee"]
+                    live_refs[e["espn_id"]] = {"referee": news["referee"], "league": lg}
+                elif live_refs.get(e["espn_id"]):
+                    info["referee"] = live_refs[e["espn_id"]]["referee"]
+                for side, fk in (("home", hf), ("away", af)):
                     eid = e[side]["espn_id"]
-                    if eid in dom_of:
-                        dl, n = dom_of[eid]
-                        sq = squad[dl].get(n, {})
+                    if lg in DOMESTIC:
+                        sq, team_key, comp_ms = squad[lg].get(fk, {}), fk, [m for m in matches[lg] if m["date"] < e["kickoff"][:10]]
                     else:
-                        sq = squad[lg].get(eid, {})
-                    ctx[f"{side}_squad"] = sq
-                    out, doubtful, ok = team_news(news[side] if news else None, sq, None, today)
-                    if not ok:
-                        eq = squad[lg].get(eid, {})
-                        out = players.likely_suspended(lg, eid, eq, matches[lg]) if eq else []
+                        dl_n = dom_of.get(eid)
+                        sq = squad[dl_n[0]].get(dl_n[1], {}) if dl_n else squad[lg].get(eid, {})
+                        team_key, comp_ms = eid, matches[lg]
+                    ov = (overrides.get("teams", {}).get(lg, {}) or {}).get(fk) if lg in DOMESTIC else None
+                    out, doubtful, ok = team_news(news.get(side) if news else None, sq, ov, today)
+                    if not ok:  # no team news yet: suspensions worked out from cards
+                        own = squad[lg].get(team_key, {})
+                        out = players.likely_suspended(lg, team_key, own, comp_ms) if own else []
                     known = known and ok
-                    ctx[f"{side}_missing"] = out
-                    ctx[f"{side}_doubtful"] = doubtful
+                    info[f"{side}_missing"] = engine.missing_info(out, sq, find_player)
+                    info[f"{side}_doubtful"] = doubtful
                     if ko - now < timedelta(days=3):
                         last = sources.espn_team_last_match(eid, e["kickoff"])
                         if last:
                             lko = datetime.fromisoformat(last[0].replace("Z", "+00:00"))
-                            ctx[f"{side}_rest_days"] = (ko.date() - lko.date()).days
-                ctx["injuries_known"] = known
+                            info[f"{side}_rest_days"] = (ko.date() - lko.date()).days
+                            info[f"{side}_europe_midweek"] = "UEFA" in (last[1] or "") and (ko - lko).days <= 4 and lg in DOMESTIC
+                info["injuries_known"] = known
+                info["derby"] = lg in DOMESTIC and is_derby(hf, af)
+                info["stakes"] = engine.stakes_now(lg, tables.get(lg, []), hf, af, e["kickoff"])
+                info["analyst_view"] = analyst.get(e["espn_id"])
                 labels = {"home": e["home"]["name"], "away": e["away"]["name"]}
                 try:
-                    jsave(path, europe.make(ep, lg, e, ctx, labels, now.isoformat(), version))
+                    jsave(path, engine.make(rec, lg, e, hf, af, info, labels, now.isoformat(), version))
                     made += 1
-                except Exception as ex:
-                    log["errors"].append(f"prediction {lg} {e['espn_id']}: {ex!r}")
+                except Exception as ex:  # one bad fixture must not stop the run
+                    log["errors"].append(f"estimate {lg} {e['espn_id']}: {ex!r}")
                     traceback.print_exc()
             log["leagues"][lg]["predictions"] = made - made_lg
+        jsave(ref_path, live_refs)
     log["predictions"] = {"made_or_updated": made, "frozen_total": frozen}
+
+    # ------------------------------------------------------------ 7b. model check for finished matches with no frozen estimate
+    retro_path = os.path.join(DATA, "retro", f"{season}.json")
+    retro_est = jload(retro_path, {})
+    if rec:
+        try:
+            frozen_ids = {os.path.basename(p)[:-5] for p in glob.glob(os.path.join(pdir, "*", "*.json"))}
+            done = []
+            for lg in PREDICTED:
+                for e in events[lg].values():
+                    if e.get("completed") and e["espn_id"] not in frozen_ids and e["home"].get("espn_id") and e["away"].get("espn_id"):
+                        done.append({"id": e["espn_id"], "date": e["kickoff"][:10], "home_key": e["home"]["espn_id"],
+                                     "away_key": e["away"]["espn_id"], "ctx": lg if lg in DOMESTIC else "europe"})
+
+            def factory(wk):
+                lf, jf = engine.fit(rec.all_matches, rec.groups, wk)
+                from model.recipe import Recipe
+                return Recipe(rec.params, rec.t).attach(rec.all_matches, wk, lf, jf, {})
+            retro_est = engine.retro(factory, done, retro_est)
+            jsave(retro_path, retro_est)
+        except Exception as ex:
+            log["errors"].append(f"model check: {ex!r}")
+            traceback.print_exc()
 
     # ------------------------------------------------------------ 8. score frozen predictions
     by_id = {m.get("espn_id"): m for lg in LEAGUES for m in matches[lg] if m.get("espn_id")}
@@ -455,7 +458,7 @@ def main():
     log["errors"] += sources.CALLS["errors"][-40:]
     log["finished"] = sources.now_utc().isoformat()
     site_data.write(ROOT, season, now, matches, events, summaries, fd, team_map, espn_teams, squad,
-                    pdir, scored, log, reports)
+                    pdir, scored, log, reports, retro_est)
     jsave(os.path.join(DATA, "state", "last_run.json"), log)
     print(json.dumps({k: v for k, v in log.items() if k != "errors"}, indent=1))
     if log["errors"]:

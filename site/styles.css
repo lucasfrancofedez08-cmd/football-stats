@@ -405,3 +405,12 @@ table.heat td.h2 { background: color-mix(in srgb, var(--pitch) 18%, transparent)
 table.heat td.h1 { background: color-mix(in srgb, var(--pitch) 7%, transparent); }
 table.heat td.h0 { background: var(--red-soft); color: var(--red); }
 .weak { font-size: .8rem; color: var(--amber); background: var(--amber-soft); border-radius: 6px; padding: 4px 8px; margin: 6px 0 4px; max-width: none; }
+
+/* ---------- v5: recipe ---------- */
+.call { font-size: .88rem; margin: 12px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--pitch-soft); max-width: none; }
+.call b { color: var(--pitch); }
+.aview { font-size: .86rem; margin: 6px 0 0; padding: 8px 10px; border-radius: 8px; background: var(--amber-soft); max-width: none; }
+.aview b { color: var(--amber); }
+table.adjm td.up { color: var(--pitch); font-weight: 750; }
+table.adjm td.down { color: var(--red); font-weight: 750; }
+td.up { color: var(--pitch); } td.down { color: var(--red); }

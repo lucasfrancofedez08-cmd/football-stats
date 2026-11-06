@@ -1,0 +1,48 @@
+{
+ "rating": {
+  "half_life": 300.0,
+  "tau": 0.3,
+  "venue_tau": 0.04,
+  "joint_tau": 0.35,
+  "tau_by_stat": {
+   "goals": 0.3,
+   "corners": 0.08,
+   "cards": 0.18,
+   "shots": 0.08,
+   "shots_on_target": 0.12
+  },
+  "joint_tau_by_stat": {
+   "goals": 0.18,
+   "corners": 0.08,
+   "cards": 0.12,
+   "shots": 0.08,
+   "shots_on_target": 0.08
+  }
+ },
+ "tuning": {
+  "form_k": {
+   "cards": 32.0,
+   "goals": 128.0,
+   "corners": 128.0,
+   "shots": 64.0,
+   "shots_on_target": 64.0
+  },
+  "h2h_k": {
+   "cards": 4.0,
+   "goals": 4.0,
+   "corners": 16.0,
+   "shots": 16.0,
+   "shots_on_target": 4.0
+  },
+  "derby_cards": 0.175,
+  "stakes_cards": 0.0,
+  "congestion_goals": 0.0,
+  "referee_k": 30.0,
+  "nb_alpha": {
+   "cards": 0.0401,
+   "corners": 0.0194,
+   "shots": 0.014,
+   "shots_on_target": 0.0086
+  }
+ }
+}

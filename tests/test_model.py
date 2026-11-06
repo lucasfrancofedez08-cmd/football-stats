@@ -7,7 +7,7 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, ROOT)
 
-from model.core import count_probabilities, goal_probabilities, league_means  # noqa: E402
+from model.core import STATS, count_probabilities, goal_probabilities, league_means  # noqa: E402
 from model.data import load_file  # noqa: E402
 from model.predict import Predictor  # noqa: E402
 from model import adjustments as adj  # noqa: E402
@@ -193,3 +193,64 @@ def test_europe_ratings_beat_european_average():
             base.append(b[k])
     assert len(model) > 400
     assert _logloss_1x2(model) < _logloss_1x2(base) - 0.03
+
+
+def _recipe_data():
+    import json as _json
+    from model.europe import assemble
+    H = os.path.join(ROOT, "data", "history")
+    fd = {lg: [m for s in ("2324", "2425", "2526") for m in load_file(os.path.join(H, f"{lg}_{s}.csv"), lg, s)]
+          for lg in ("premier-league", "la-liga")}
+    rows, clubs = [], {}
+    for s in ("2425", "2526"):
+        rows += _json.load(open(os.path.join(H, f"europe_{s}.json")))
+        for t, g in _json.load(open(os.path.join(H, f"europe_clubs_{s}.json"))).items():
+            clubs.setdefault(t, []).extend(g)
+    return assemble(fd, rows, clubs)
+
+
+def test_recipe_base_beats_league_average():
+    """Venue-aware, opponent-adjusted ratings (the 60% base), refitted weekly over 2025-26."""
+    from datetime import date as _date, timedelta as _td
+    from model.ratings import Ratings, league_groups
+    matches, _, _ = _recipe_data()
+    for lg in ("premier-league", "la-liga"):
+        lm = [m for m in matches if m["ctx"] == lg]
+        test = [m for m in lm if "2025-08-01" <= m["date"] < "2026-06-30"]
+        weeks = sorted({(_date.fromisoformat(m["date"]) - _td(days=_date.fromisoformat(m["date"]).weekday())).isoformat() for m in test})
+        model, base = [], []
+        for wk in weeks:
+            prev = [m for m in lm if m["date"] < wk]
+            r = Ratings(half_life=300, tau=0.3, venue_tau=0.1).fit(prev, league_groups(prev, prev[0]["date"]), "goals", wk)
+            bh, ba = r.venue(lg)
+            end = (_date.fromisoformat(wk) + _td(days=7)).isoformat()
+            for m in (x for x in test if wk <= x["date"] < end):
+                lh, la = r.expect(m["home"], m["away"], lg)
+                g, b = goal_probabilities(lh, la, -0.12), goal_probabilities(bh, ba, -0.12)
+                k = "home_win" if m["hg"] > m["ag"] else "draw" if m["hg"] == m["ag"] else "away_win"
+                model.append(g[k])
+                base.append(b[k])
+        assert len(model) > 350
+        assert _logloss_1x2(model) < _logloss_1x2(base) - 0.02, lg
+
+
+def test_recipe_is_60_base_40_adjusted():
+    from model.core import Params
+    from model.ratings import Ratings, league_groups
+    from model.recipe import Recipe
+    matches, groups, _ = _recipe_data()
+    wk = "2025-11-03"
+    lm = [m for m in matches if m["ctx"] == "premier-league" and m["date"] < wk]
+    lf = {"premier-league": {s: Ratings().fit(lm, league_groups(lm, lm[0]["date"]), s, wk) for s in STATS}}
+    jf = {s: Ratings().fit([m for m in matches if m["date"] < wk], groups, s, wk) for s in STATS}
+    rec = Recipe(Params(), {"form_k": 6.0, "h2h_k": 4.0, "derby_cards": 0.1}).attach(matches, wk, lf, jf, {})
+    m = next(x for x in matches if x["ctx"] == "premier-league" and x["date"] >= wk)
+    info = {"derby": True, "home_missing": [{"name": "X", "share": 0.3}]}
+    p = rec.predict(m["home"], m["away"], "premier-league", info)
+    for s, v in p["stats"].items():
+        assert abs(v["home"] - (0.6 * v["base_home"] + 0.4 * v["adj_home"])) < 1e-9
+        assert abs(v["away"] - (0.6 * v["base_away"] + 0.4 * v["adj_away"])) < 1e-9
+    kinds = {a["kind"] for a in p["adjustments"]}
+    assert {"missing", "derby", "referee"} <= kinds
+    miss = next(a for a in p["adjustments"] if a["kind"] == "missing")
+    assert abs(miss["effect_pct"] - (-12.0)) < 1e-6  # 30% share x 40% weight

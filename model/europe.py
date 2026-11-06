@@ -94,7 +94,8 @@ def assemble(fd_by_league, europe_rows, club_schedules, extra_map=None):
             names.setdefault(h, m["home"])
             names.setdefault(a, m["away"])
             r = {k: m.get(k) for k in ("hg", "ag", "hc", "ac", "hcards", "acards", "hs", "as", "hst", "ast")}
-            matches.append({"date": m["date"][:10], "ctx": lg, "home": h, "away": a, **r})
+            matches.append({"date": m["date"][:10], "ctx": lg, "home": h, "away": a, "season": m.get("season"),
+                            "referee": m.get("referee"), **r})
 
     # clubs from other leagues: their top-flight games (results only), and UEFA qualifiers
     euro_ids = {r["id"] for r in europe_rows}
@@ -127,7 +128,7 @@ def assemble(fd_by_league, europe_rows, club_schedules, extra_map=None):
 
         def card(x):
             return None if x.get("yellow") is None or x.get("red") is None else x["yellow"] + x["red"]
-        matches.append({"date": r["date"][:10], "ctx": EUROPE_CTX, "comp": r.get("comp"), "home": h, "away": a,
+        matches.append({"date": r["date"][:10], "ctx": EUROPE_CTX, "comp": r.get("comp"), "round": r.get("round"), "home": h, "away": a,
                         "hg": r["hg"], "ag": r["ag"], "hc": hs_.get("corners"), "ac": as_.get("corners"),
                         "hcards": card(hs_), "acards": card(as_), "hs": hs_.get("shots"), "as": as_.get("shots"),
                         "hst": hs_.get("sot"), "ast": as_.get("sot"), "id": r["id"]})

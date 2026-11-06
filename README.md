@@ -9,25 +9,30 @@ Past match statistics and statistical estimates for upcoming matches in seven le
 A GitHub Actions workflow (`.github/workflows/update.yml`) runs every 3 hours:
 
 1. Downloads results and match stats from **football-data.co.uk**, fixtures, lineups, goals and Champions League matches from **ESPN's public feed**, and team news from **FotMob**.
-2. Cross-checks the two sources stat by stat. A stat the sources disagree on is shown with both values and left out of the model for that match.
-3. Makes predictions for every league match in the next 31 days. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
+2. Cross-checks the two sources stat by stat (and FotMob for referees). A stat the sources disagree on is shown with both values and left out of the model for that match.
+3. Makes predictions for every match in the next 31 days, all ten competitions. A prediction is rewritten on each run until kick-off, then **frozen** (never touched again) and scored after the match. The git history of `data/predictions/` is the proof that each one existed before kick-off.
 4. Writes the site data (`site/data/`) and publishes `site/` to GitHub Pages.
 
 Team news (injured and suspended players) comes from **FotMob's public feed** for matches in the next 4 days. When FotMob has nothing, suspensions are worked out from cards. `data/overrides/injuries.json` is a manual override that is merged on top.
 
 ## Model
 
-`model/` — expected numbers are 60% statistical base and 40% "form & matchup" views (the owner's chosen split).
+One recipe for every match, league or European (`model/recipe.py`, run by `pipeline/engine.py`):
 
-- Base (60%): league venue averages × team attack × opponent defence, recency-weighted (last 6 games count double) and shrunk toward last season (or a promoted-team prior). Goals borrow half their strength from shots on target.
-- Views (40%, `model/views.py`): form over the last 5 games (16%), team gap in points per game mapped to each stat with effects measured on 2022-25 (14%), and up to 6 head-to-head meetings (10%). Each view shrinks toward the base when its sample is small.
-- Then separate, listed adjustments (derby cards, missing players, short rest), and Dixon-Coles for goals / negative binomial for corners, cards and shots.
+**final = 60% base + 40% adjusted**
 
-`backtest/run.py` tunes on 2023-24 and 2024-25 and tests once on 2025-26 (2,364 matches across the seven leagues, walk-forward), with a per-league report. A league only gets estimates (`PREDICTED` in `pipeline/sources.py`) if it beats league averages on win/draw/loss and goals. Results in `backtest/results.json`; tuned parameters in `model/tuned.json`. On the test season the model beats league averages on every stat; the margin is large for win/draw/loss and shots, small for corners and cards. The 60/40 mix scores almost the same as the base alone (slightly better on four stats, slightly worse on cards). Referee history did not improve accuracy, so it is shown for context only.
+- **Base (60%)** — `model/ratings.py`: a penalised, time-weighted Poisson rating fit per stat (half-life 300 days, last three seasons). The home team's home attack against the away team's away defence (and the reverse), opponent-adjusted and measured against the competition's average; small team-specific home/away deviations. League games use a fit on that league only; European games use one joint fit over every league, every club's domestic and qualifying games (ESPN team schedules) and the European matches, so clubs share a scale. How far a team may sit from its league's level (`tau_by_stat`) was tuned per stat: wide for goals, narrow for corners and shots, where raw team averages overstate real differences.
+- **Adjustments (40%)**, each listed on the match page with its effect on the final number: momentum (last 6 games in any competition vs what the ratings expected, with head-to-head as 20% of it), missing players (factor 1 − the player's share of team goals + ½ assists, which at 40% weight means a replacement covers 60%; a missing regular keeper or defender adds 3% to the opponent), referee for cards (his record blended with 30 average games), fixture congestion, derby and high stakes. Measured effects are converted so their effect on the final number equals what was measured.
+- **Probabilities**: Dixon-Coles for goals, negative binomial for corners, cards and shots.
+- **Analyst view**: optional written judgement per match (`data/overrides/analyst.json`), shown separately and never mixed into the numbers.
 
-### European competitions
+`backtest/recipe.py` tunes on 2024-25 and tests once on 2025-26 (2,895 matches, all ten competitions, walk-forward by week), against plain averages and against the previous method. Results in `backtest/results_recipe.json`, settings in `model/tuned_recipe.json`. On the test season:
 
-`model/europe.py` — the same 60/40 split with a cross-league base: one penalised, time-weighted Poisson rating model per stat, fitted on the seven leagues (football-data.co.uk), the league and qualifying games of every club in Europe (ESPN team schedules, results only) and the European matches (ESPN, with stats). Club ratings shrink toward their league's level; European results set the league levels. The 40% is form (last 5 games, any competition), strength gap and head-to-head. `backtest/europe.py` tunes on 2024-25 and tests on the 531 European matches of 2025-26 (`backtest/results_europe.json`). History comes from `tools/collect_europe.py` (workflow `collect-europe`); at each season change `pipeline/run.py` rolls the finished season into `data/history` itself.
+- Win/draw/loss and goals beat the plain average in every competition (Brier 0.585 vs 0.648 overall) and are level with the previous method (within about 1% everywhere; best gain Premier League +1.1%).
+- Cards, shots and shots on target each beat the average in 8 of 10 competitions (by small margins); corners are level with the average (−2% to +2%).
+- Momentum measured as weak: recent form adds little once the base weights recent games, so its tuned size is small. Derbies: +18% cards. Stakes and congestion: no measurable effect (shown for information, size 0).
+
+Referees for every competition come from FotMob (`tools/collect_referees.py` for history, live for upcoming matches). Finished matches without a frozen estimate get a "model check" (`data/retro/`), clearly labelled and outside the track record. Older modules (`model/predict.py`, `model/views.py`, `model/europe.py` predictor) are kept for earlier frozen estimates and the previous backtests.
 
 ## Layout
 
