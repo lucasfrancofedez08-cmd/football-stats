@@ -1,4 +1,4 @@
 {
- "_about": "Written judgement per upcoming match, keyed by ESPN match id. Shown in a separate 'Analyst view' box and never mixed into the numbers. Fields: overall, goals, corners, cards, shots, shots_on_target (one or two sentences each), sources (list of URLs), written_at (ISO time). Never use 'lock', 'sure thing' or 'guaranteed'.",
+ "_about": "Subjective view per upcoming match, keyed by ESPN match id, written by a scheduled task from recent news. Shown in each stat's 'Why' box and next to 'Our call'; never mixed into the numbers. Per stat (goals, corners, cards, shots, shots_on_target): {lean: higher|lower|same, call: short judgement call, text: reasoning}. Also: overall, sources (URLs), written_at (ISO). Never use 'lock', 'sure thing' or 'guaranteed'.",
  "matches": {}
 }

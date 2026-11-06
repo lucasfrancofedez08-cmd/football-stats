@@ -234,23 +234,35 @@ def test_recipe_base_beats_league_average():
         assert _logloss_1x2(model) < _logloss_1x2(base) - 0.02, lg
 
 
-def test_recipe_is_60_base_40_adjusted():
+def test_recipe_is_45_base_55_adjusted():
     from model.core import Params
     from model.ratings import Ratings, league_groups
-    from model.recipe import Recipe
+    from model.recipe import ADJ_W, BASE_W, Recipe
+    assert (BASE_W, ADJ_W) == (0.45, 0.55)
     matches, groups, _ = _recipe_data()
     wk = "2025-11-03"
     lm = [m for m in matches if m["ctx"] == "premier-league" and m["date"] < wk]
     lf = {"premier-league": {s: Ratings().fit(lm, league_groups(lm, lm[0]["date"]), s, wk) for s in STATS}}
     jf = {s: Ratings().fit([m for m in matches if m["date"] < wk], groups, s, wk) for s in STATS}
-    rec = Recipe(Params(), {"form_k": 6.0, "h2h_k": 4.0, "derby_cards": 0.1}).attach(matches, wk, lf, jf, {})
     m = next(x for x in matches if x["ctx"] == "premier-league" and x["date"] >= wk)
     info = {"derby": True, "home_missing": [{"name": "X", "share": 0.3}]}
-    p = rec.predict(m["home"], m["away"], "premier-league", info)
-    for s, v in p["stats"].items():
-        assert abs(v["home"] - (0.6 * v["base_home"] + 0.4 * v["adj_home"])) < 1e-9
-        assert abs(v["away"] - (0.6 * v["base_away"] + 0.4 * v["adj_away"])) < 1e-9
-    kinds = {a["kind"] for a in p["adjustments"]}
-    assert {"missing", "derby", "referee"} <= kinds
-    miss = next(a for a in p["adjustments"] if a["kind"] == "missing")
-    assert abs(miss["effect_pct"] - (-12.0)) < 1e-6  # 30% share x 40% weight
+    out = {}
+    for S in (1.0, 2.0):
+        rec = Recipe(Params(), {"form_k": 6.0, "h2h_k": 4.0, "derby_cards": 0.1, "adj_strength": S}).attach(matches, wk, lf, jf, {})
+        p = rec.predict(m["home"], m["away"], "premier-league", info)
+        for s, v in p["stats"].items():
+            assert abs(v["home"] - (0.45 * v["base_home"] + 0.55 * v["adj_home"])) < 1e-9
+            assert abs(v["away"] - (0.45 * v["base_away"] + 0.55 * v["adj_away"])) < 1e-9
+        kinds = {a["kind"] for a in p["adjustments"]}
+        assert {"missing", "derby", "referee"} <= kinds
+        out[S] = p
+    # measured size: a 30%-share player at the measured 40% weight = -12%; twice as strong (log scale) = 1 - 0.88^2
+    miss1 = next(a for a in out[1.0]["adjustments"] if a["kind"] == "missing")
+    miss2 = next(a for a in out[2.0]["adjustments"] if a["kind"] == "missing")
+    assert abs(miss1["effect_pct"] - (-12.0)) < 1e-6 and abs(miss2["measured_pct"] - (-12.0)) < 1e-6
+    assert abs(miss2["effect_pct"] - (-22.6)) < 0.05
+    # doubling the strength doubles how far the adjustments move the number (log scale)
+    for s in STATS:
+        a1 = math.log(out[1.0]["stats"][s]["home"] / out[1.0]["stats"][s]["base_home"])
+        a2 = math.log(out[2.0]["stats"][s]["home"] / out[2.0]["stats"][s]["base_home"])
+        assert abs(a2 - 2 * a1) < 1e-9

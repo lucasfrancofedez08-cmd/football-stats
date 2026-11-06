@@ -44,5 +44,9 @@
    "shots": 0.014,
    "shots_on_target": 0.0086
   }
+ },
+ "owner": {
+  "adj_strength": 2.05,
+  "_note": "Owner's choice (6 Nov 2026): the adjustments' combined effect is amplified about 2x (log scale) so the base's share of what moves an estimate drops by about 15 points (76% -> 61% on matches near kick-off). The measured sizes stay in 'tuning'."
  }
 }

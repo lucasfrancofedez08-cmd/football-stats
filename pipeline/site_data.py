@@ -348,7 +348,10 @@ def write(root, season, now, matches, events, summaries, fd, team_map, espn_team
               "baseline": {k: {kk: v[kk] for kk in ("mae", "brier", "ll", "lines") if kk in v} for k, v in r["baseline"].items()},
               "objective_x1000": {k: v["objective"] * 1000 for k, v in r["test"].items()},
               "baseline_objective_x1000": {k: v["objective"] * 1000 for k, v in r["baseline"].items()},
-              "calibration": r.get("calibration", []), "tuning": r["tuning"]}
+              "calibration": r.get("calibration", []), "tuning": r["tuning"],
+              "owner": {k: v for k, v in (r.get("owner") or {}).items() if not k.startswith("_")},
+              "measured_objective_x1000": {k: v["objective"] * 1000 for k, v in (r.get("measured") or {}).items()},
+              "measured_brier": (r.get("measured") or {}).get("goals", {}).get("brier")}
     recent = []
     for p in sorted(scored, key=lambda p: p["kickoff"], reverse=True)[:60]:
         r = p["result"]

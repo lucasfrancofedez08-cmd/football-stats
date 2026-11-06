@@ -414,3 +414,10 @@ table.heat td.h0 { background: var(--red-soft); color: var(--red); }
 table.adjm td.up { color: var(--pitch); font-weight: 750; }
 table.adjm td.down { color: var(--red); font-weight: 750; }
 td.up { color: var(--pitch); } td.down { color: var(--red); }
+
+/* Why box: reasoning, base, adjustments, subjective view */
+.why-h { font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--ink); margin: 14px 0 0; }
+.reason { margin: 4px 0 0; line-height: 1.5; max-width: none; }
+.why b.up { color: var(--pitch); }
+.why b.down { color: var(--red); }
+.pill.lean { background: var(--amber-soft); color: var(--amber); font-size: .74rem; padding: 1px 8px; }

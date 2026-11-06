@@ -79,7 +79,8 @@ def build(season, now, fd, matches, events, team_map, sdir, log, jload, jsave, l
     refs = refmod.join(allm, names, refmod.load_rows(HISTORY) + list(live_ref_rows), DOMESTIC)
     asof = (now + timedelta(days=1)).date().isoformat()
     lf, jf = fit(allm, groups, asof)
-    rec = Recipe(Params(**{**params.__dict__}), t["tuning"]).attach(allm, asof, lf, jf, refs)
+    owner = {k: v for k, v in t.get("owner", {}).items() if not k.startswith("_")}  # owner's choices on top
+    rec = Recipe(Params(**{**params.__dict__}), {**t["tuning"], **owner}).attach(allm, asof, lf, jf, refs)
     rec.all_matches, rec.groups, rec.names = allm, groups, names
     log["model"] = {"matches": len([m for m in allm if m["date"] >= f"{int(asof[:4]) - 3}{asof[4:]}"]),
                     "teams": len(jf["goals"].att), "referees_linked": len(refs)}
@@ -156,7 +157,7 @@ def make(rec, league, fixture, home_file_key, away_file_key, info, labels, made_
     p["league"] = league
     return rnd({
         "id": fixture["espn_id"], "league": league, "kickoff": fixture["kickoff"],
-        "home": home_file_key, "away": away_file_key, "made_at": made_at, "model_version": version, "model": "recipe-60-40",
+        "home": home_file_key, "away": away_file_key, "made_at": made_at, "model_version": version, "model": "recipe",
         "prediction": p, "baseline": baseline(rec, ctx_key),
         "missing": {"home": info.get("home_missing") or [], "away": info.get("away_missing") or []},
         "doubtful": {"home": info.get("home_doubtful") or [], "away": info.get("away_doubtful") or []},

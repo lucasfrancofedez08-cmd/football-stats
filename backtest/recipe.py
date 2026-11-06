@@ -254,8 +254,20 @@ def measure(pairs_base, flag, stat="cards"):
     return (act / exp - 1 if exp else 0.0), n
 
 
+def load_owner():
+    """Settings the owner chose on top of the measured ones (kept across re-tuning)."""
+    try:
+        return json.load(open(os.path.join(ROOT, "model", "tuned_recipe.json"))).get("owner", {})
+    except (OSError, ValueError):
+        return {}
+
+
 def main():
     params, _ = load_tuned()
+    if os.environ.get("RECIPE_TEST_ONLY"):  # re-test the current settings without re-tuning
+        t = json.load(open(os.path.join(ROOT, "model", "tuned_recipe.json")))
+        test(t["rating"], t["tuning"], params)
+        return
     D = data()
     print(f"matches {len(D['matches'])}, referee-linked {len(D['referees'])}", flush=True)
     # ------------------------------------------------ 1. base ratings (60%)
@@ -339,30 +351,43 @@ def main():
               "referee_k": best_by_stat["cards"][3],
               "nb_alpha": {st: v[4] for st, v in best_by_stat.items() if st != "goals"}}
     print("  chosen", {k: v for k, v in tuning.items() if k != "nb_alpha"}, flush=True)
-    # ------------------------------------------------ 4. test once on 2025-26
+    test(cfg, tuning, params)
+
+
+def test(cfg, tuning, params):
+    """4. test once on 2025-26, with the owner's settings (tuned_recipe.json "owner", e.g. adj_strength)
+    applied on top of the measured ones; the measured-size version is kept for comparison."""
+    owner = {k: v for k, v in load_owner().items() if not k.startswith("_")}
     fits = fit_season(TEST, cfg)
-    model = predict_season(TEST, fits, params, tuning)
+    model = predict_season(TEST, fits, params, {**tuning, **owner})
+    measured = predict_season(TEST, fits, params, tuning) if owner else model
     base = baseline_season(TEST)
     alpha = tuning["nb_alpha"]
+    gx = group(measured, comp_of)
     prev = json.load(open(os.path.join(ROOT, "backtest", "results.json")))["by_league"]
     prev_eu = json.load(open(os.path.join(ROOT, "backtest", "results_europe.json")))["by_comp"]
     gm, gb = group(model, comp_of), group(base, comp_of)
     by_comp = {}
     print("Test 2025-26 (vs average | vs previous model):", flush=True)
     for c in DOMESTIC + COMPS:
-        rm, rb = evaluate(gm[c], params, alpha), evaluate(gb[c], params, alpha)
+        rm, rb, rx = evaluate(gm[c], params, alpha), evaluate(gb[c], params, alpha), evaluate(gx[c], params, alpha)
         pv = prev.get(c) or prev_eu.get(c)
         by_comp[c] = {"matches": len(gm[c]), "brier_1x2": rm["goals"]["brier"], "baseline_brier_1x2": rb["goals"]["brier"],
                       "ll_1x2": rm["goals"]["ll"], "baseline_ll_1x2": rb["goals"]["ll"],
-                      "prev_brier_1x2": pv["brier_1x2"] if pv else None,
+                      "prev_brier_1x2": pv["brier_1x2"] if pv else None, "measured_brier_1x2": rx["goals"]["brier"],
                       "stats": {s: {"objective": rm[s]["objective"], "baseline_objective": rb[s]["objective"],
                                     "prev_objective": pv["stats"][s]["objective"] if pv else None,
+                                    "measured_objective": rx[s]["objective"],
                                     "mae": rm[s]["mae"], "baseline_mae": rb[s]["mae"]} for s in STATS}}
         v = by_comp[c]
         print(f"  {c:18s} n={v['matches']:3d} 1X2 brier {v['brier_1x2']:.4f} avg {v['baseline_brier_1x2']:.4f} prev {v['prev_brier_1x2'] or 0:.4f} | "
               + " ".join(f"{s[:4]} {(1 - x['objective'] / x['baseline_objective']) * 100:+.1f}%/{(x['prev_objective'] - x['objective']) / x['prev_objective'] * 100 if x['prev_objective'] else 0:+.1f}%"
                          for s, x in v["stats"].items()), flush=True)
-    allm, allb = evaluate(model, params, alpha), evaluate(base, params, alpha)
+    allm, allb, allx = evaluate(model, params, alpha), evaluate(base, params, alpha), evaluate(measured, params, alpha)
+    if owner:
+        print("  owner settings", owner, "vs measured sizes: " + " ".join(
+            f"{s[:5]} {(allx[s]['objective'] - allm[s]['objective']) / allx[s]['objective'] * 100:+.2f}%" for s in STATS)
+            + f" | 1X2 brier {allm['goals']['brier']:.4f} vs {allx['goals']['brier']:.4f}", flush=True)
     from model.core import count_probabilities, goal_probabilities
     bins = [{"lo": i / 10, "hi": (i + 1) / 10, "n": 0, "p": 0.0, "hits": 0} for i in range(10)]
     for m, lam in model:
@@ -388,10 +413,10 @@ def main():
         b["actual"] = b.pop("hits") / b["n"] if b["n"] else None
         if b["n"]:
             print(f"    {b['lo']:.0%}-{b['hi']:.0%}: n={b['n']:5d} predicted {b['avg_predicted']:.1%} actual {b['actual']:.1%}", flush=True)
-    out = {"season": TEST, "rating": cfg, "tuning": tuning, "matches": len(model),
-           "test": allm, "baseline": allb, "by_comp": by_comp, "calibration": bins}
+    out = {"season": TEST, "rating": cfg, "tuning": tuning, "owner": owner, "matches": len(model),
+           "test": allm, "baseline": allb, "measured": allx, "by_comp": by_comp, "calibration": bins}
     json.dump(out, open(os.path.join(ROOT, "backtest", "results_recipe.json"), "w"), indent=1, default=float)
-    json.dump({"rating": cfg, "tuning": tuning}, open(os.path.join(ROOT, "model", "tuned_recipe.json"), "w"), indent=1)
+    json.dump({"rating": cfg, "tuning": tuning, "owner": load_owner()}, open(os.path.join(ROOT, "model", "tuned_recipe.json"), "w"), indent=1)
     print(f"ALL n={len(model)} 1X2 brier {allm['goals']['brier']:.4f} vs avg {allb['goals']['brier']:.4f}", flush=True)
 
 
